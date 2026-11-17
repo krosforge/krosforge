@@ -154,6 +154,56 @@ public sealed class UpdateTests : IDisposable
     [Fact]
     public void CleanupCannotTargetArbitraryDirectory() => Assert.Throws<InvalidDataException>(() => UpdateInstaller.DeleteStaging(root));
     [Fact]
+    public async Task RecoveryRestoresVerifiedPreviousExecutable()
+    {
+        var (plan, backup) = await RecoveryFiles();
+        await UpdateInstaller.RestoreAsync(plan, backup, Token);
+        Assert.Equal(plan.CurrentHash, await ReleaseClient.HashAsync(plan.Target, Token));
+        Assert.False(File.Exists(backup));
+    }
+    [Fact]
+    public async Task RecoveryRejectsChangedBackup()
+    {
+        var (plan, backup) = await RecoveryFiles();
+        File.WriteAllText(backup, "changed backup");
+        await Assert.ThrowsAsync<InvalidDataException>(() => UpdateInstaller.RestoreAsync(plan, backup, Token));
+        Assert.Equal("failed update", File.ReadAllText(plan.Target));
+        Assert.True(File.Exists(backup));
+    }
+    [Fact]
+    public async Task RecoveryRetriesWindowsReadLockUntilReleased()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var (plan, backup) = await RecoveryFiles();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var held = new FileStream(plan.Target, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var recovery = UpdateInstaller.RestoreAsync(plan, backup, deadline.Token);
+        await Task.Delay(3000, Token);
+        Assert.False(recovery.IsCompleted);
+        held.Dispose();
+        await recovery;
+        Assert.Equal(plan.CurrentHash, await ReleaseClient.HashAsync(plan.Target, Token));
+    }
+    [Fact]
+    public async Task RecoveryDeadlinePreservesBackupUnderPersistentWindowsLock()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var (plan, backup) = await RecoveryFiles();
+        using var held = new FileStream(plan.Target, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => UpdateInstaller.RestoreAsync(plan, backup, deadline.Token));
+        Assert.Equal(plan.CurrentHash, await ReleaseClient.HashAsync(backup, Token));
+        Assert.Equal("failed update", File.ReadAllText(plan.Target));
+    }
+    private async Task<(UpdatePlan Plan, string Backup)> RecoveryFiles()
+    {
+        var target = Path.Combine(root, "Krosforge.exe");
+        var backup = Path.Combine(root, "backup.exe");
+        File.WriteAllText(target, "failed update");
+        File.WriteAllText(backup, "previous launcher");
+        return (new UpdatePlan(target, await ReleaseClient.HashAsync(target, Token), await ReleaseClient.HashAsync(backup, Token), 0, 0, false), backup);
+    }
+    [Fact]
     public void DuplicateChecksumsAreRejected()
     {
         var line = new string('a', 64) + "  " + Asset + "\n";

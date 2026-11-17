@@ -161,10 +161,15 @@ internal static class UpdateInstaller
         {
             try { Console.Error.WriteLine($"Update helper failed during {phase}: {error.GetType().Name} (0x{error.HResult:X8})"); }
             catch (IOException) { }
-            if (plan is not null && replaced && backup is not null && File.Exists(backup))
+            if (plan is not null && replaced)
             {
-                try { File.Replace(backup, plan.Target, null); }
-                catch (Exception rollbackError) when (rollbackError is IOException or UnauthorizedAccessException) { return 5; }
+                try
+                {
+                    if (backup is null) return 5;
+                    using var recoveryDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    await RestoreAsync(plan, backup, recoveryDeadline.Token);
+                }
+                catch (Exception rollbackError) when (rollbackError is IOException or InvalidDataException or UnauthorizedAccessException or OperationCanceledException) { return 5; }
             }
             if (verified && plan is not null && !IsParentRunning(plan))
             {
@@ -197,6 +202,35 @@ internal static class UpdateInstaller
         return start;
     }
     internal static string BackupPath(string target, string directory) => Path.Combine(Path.GetDirectoryName(target)!, ".krosforge-backup-" + Path.GetFileName(directory) + ".exe");
+    internal static async Task RestoreAsync(UpdatePlan plan, string backup, CancellationToken token)
+    {
+        var restored = false;
+        while (true)
+        {
+            token.ThrowIfCancellationRequested();
+            try
+            {
+                if (!restored)
+                {
+                    CheckFile(backup);
+                    if (!string.Equals(await ReleaseClient.HashAsync(backup, token), plan.CurrentHash, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("The recovery executable changed.");
+                    CheckFile(plan.Target);
+                    File.Replace(backup, plan.Target, null);
+                    restored = true;
+                }
+                // Do not restart until the installed image is confirmed to be the previous version.
+                if (!string.Equals(await ReleaseClient.HashAsync(plan.Target, token), plan.CurrentHash, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("The previous executable was not restored.");
+                return;
+            }
+            catch (Exception error) when (OperatingSystem.IsWindows() &&
+                (error is IOException or UnauthorizedAccessException) && (error.HResult & 0xffff) is 5 or 32 or 33)
+            {
+                await Task.Delay(200, token);
+            }
+        }
+    }
     internal static async Task ReplaceAsync(UpdatePlan plan, string directory, CancellationToken token)
     {
         CheckFile(plan.Target);

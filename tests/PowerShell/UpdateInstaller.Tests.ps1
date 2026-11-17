@@ -12,8 +12,8 @@ function Wait-Window($Process) {
     do { Start-Sleep -Milliseconds 100; $Process.Refresh() } while (-not $Process.HasExited -and $Process.MainWindowHandle -eq 0 -and [DateTime]::UtcNow -lt $Deadline)
     if ($Process.HasExited -or $Process.MainWindowHandle -eq 0) { throw 'Launcher window did not open.' }
 }
-function Check-Update([bool]$FailRestart, [bool]$Cancel = $false) {
-    Write-Host ('Testing update; expected rollback: ' + $FailRestart + '; cancel: ' + $Cancel)
+function Check-Update([bool]$FailRestart, [bool]$Cancel = $false, [bool]$LockRollback = $false) {
+    Write-Host ('Testing update; expected rollback: ' + $FailRestart + '; cancel: ' + $Cancel + '; rollback read lock: ' + $LockRollback)
     $Install = Join-Path $Root ([Guid]::NewGuid().ToString('N'))
     New-Item $Install -ItemType Directory | Out-Null
     $Target = Join-Path $Install 'Krosforge.exe'
@@ -32,7 +32,11 @@ function Check-Update([bool]$FailRestart, [bool]$Cancel = $false) {
     New-Item $Stage -ItemType Directory -Force | Out-Null
     $Stages.Add($Stage)
     $Candidate = Join-Path $Stage 'Krosforge.exe'
-    if ($FailRestart) { [IO.File]::WriteAllBytes($Candidate, [Text.Encoding]::UTF8.GetBytes('not-an-executable')) }
+    if ($LockRollback) {
+        Copy-Item (Join-Path $Root 'RollbackLockProbe.exe') $Candidate
+        Copy-Item $Candidate (Join-Path $Stage 'RollbackLockProbe.exe')
+    }
+    elseif ($FailRestart) { [IO.File]::WriteAllBytes($Candidate, [Text.Encoding]::UTF8.GetBytes('not-an-executable')) }
     else { Copy-Item (Join-Path $CandidatePackage 'Krosforge.exe') $Candidate }
     $Expected = (Get-FileHash $Candidate).Hash.ToLowerInvariant()
     Copy-Item $Target (Join-Path $Stage 'UpdateHost.exe')
@@ -43,6 +47,8 @@ function Check-Update([bool]$FailRestart, [bool]$Cancel = $false) {
     $Plan | ConvertTo-Json | Set-Content (Join-Path $Stage 'update.json') -Encoding UTF8
     $HelperErrors = Join-Path $Root ('helper-' + [Guid]::NewGuid().ToString('N') + '.stderr.txt')
     $Helper = Start-Process (Join-Path $Stage 'UpdateHost.exe') -ArgumentList @('--apply-update', ('"' + $Stage + '"')) -RedirectStandardError $HelperErrors -PassThru
+    # Keep the native handle so Windows PowerShell can read ExitCode after a fast exit.
+    $null = $Helper.Handle
     $Owned.Add($Helper)
     $Deadline = [DateTime]::UtcNow.AddSeconds(20)
     while (-not (Test-Path (Join-Path $Stage 'ready'))) {
@@ -63,9 +69,15 @@ function Check-Update([bool]$FailRestart, [bool]$Cancel = $false) {
     }
     $null = $Parent.CloseMainWindow()
     if (-not $Parent.WaitForExit(40000)) { throw 'Launcher did not close for the update.' }
-    if (-not $Helper.WaitForExit(60000)) { throw ('Update helper did not finish. State: ' + (Get-Content (Join-Path $Stage 'state') -ErrorAction SilentlyContinue)) }
+    $ReadLockObserved = $false
+    $Deadline = [DateTime]::UtcNow.AddSeconds(90)
+    while (-not $Helper.WaitForExit(100)) {
+        if (Test-Path (Join-Path $Stage 'rollback-read-lock')) { $ReadLockObserved = $true }
+        if ([DateTime]::UtcNow -ge $Deadline) { throw ('Update helper did not finish. State: ' + (Get-Content (Join-Path $Stage 'state') -ErrorAction SilentlyContinue)) }
+    }
+    if ($LockRollback -and -not ($ReadLockObserved -or (Test-Path (Join-Path $Stage 'rollback-read-lock')))) { throw 'The rollback read-lock scenario was not exercised.' }
     if ($FailRestart) {
-        if ($Helper.ExitCode -ne 4) { throw ('Expected rollback, got exit code ' + $Helper.ExitCode) }
+        if ($Helper.ExitCode -ne 4) { throw ('Expected rollback, got exit code ' + $Helper.ExitCode + '; ' + (Get-Content $HelperErrors -Raw)) }
         if ((Get-FileHash $Target).Hash.ToLowerInvariant() -ne $Original) { throw 'Previous executable was not restored.' }
     } else {
         if ($Helper.ExitCode -ne 0) { throw ('Update failed: ' + $Helper.ExitCode) }
@@ -89,10 +101,13 @@ function Check-Update([bool]$FailRestart, [bool]$Cancel = $false) {
     if (-not $FailRestart -and (Get-ChildItem $Install -Filter '.krosforge-backup-*.exe')) { throw 'Backup was not cleaned after acknowledged startup.' }
 }
 try {
+    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'CompileUpdateFailureProbe.ps1') -OutputPath (Join-Path $Root 'RollbackLockProbe.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not compile the rollback lock fixture.' }
     Check-Update $false $true
     Check-Update $false
     Check-Update $true
-    Write-Host 'PASS: Windows helper cancels, installs, waits for window acknowledgement, preserves data, and rolls back a failed restart.'
+    Check-Update $true $false $true
+    Write-Host 'PASS: Windows helper cancels, installs, waits for window acknowledgement, preserves data, and rolls back failed restarts including a three-second read lock.'
 } finally {
     foreach ($Process in $Owned) {
         if (-not $Process.HasExited) { $Process.Kill(); $Process.WaitForExit(5000) | Out-Null }
@@ -100,6 +115,9 @@ try {
     }
     # Runtime children are limited to exact executable paths under this test's owned directory.
     Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Root + '\', [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    foreach ($Stage in $Stages) {
+        Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq (Join-Path $Stage 'RollbackLockProbe.exe') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    }
     Start-Sleep -Milliseconds 500
     if (Test-Path $Root) { Remove-Item $Root -Recurse -Force }
     foreach ($Stage in $Stages) { if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force } }
