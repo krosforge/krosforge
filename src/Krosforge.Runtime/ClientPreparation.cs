@@ -4,31 +4,30 @@ using Krosforge.Contracts;
 namespace Krosforge.Runtime;
 
 public sealed record CopyProgress(long BytesCopied, long TotalBytes);
-public sealed record PreparedClient(Guid ProfileId, string Build, string Company, string Product);
+public sealed record PreparedClient(int Layout, string Build, string Company, string Product);
 public static class ClientPreparation
 {
-    public static async Task<string> PrepareAsync(string source, string dataRoot, Profile profile, IProgress<CopyProgress>? progress, CancellationToken token)
+    public static string Target(string dataRoot) => Path.Combine(Path.GetFullPath(dataRoot), "clients", "shared");
+    public static async Task<string> PrepareAsync(string source, string dataRoot, IProgress<CopyProgress>? progress, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         var installation = ClientInstallation.Inspect(source);
-        return await PrepareValidatedAsync(installation, dataRoot, profile, progress, token, ClientCompatibility.Validate);
+        return await PrepareValidatedAsync(installation, dataRoot, progress, token, ClientCompatibility.Validate);
     }
-    internal static async Task<string> PrepareValidatedAsync(Installation installation, string dataRoot, Profile profile, IProgress<CopyProgress>? progress, CancellationToken token, Action<string> validate)
+    internal static async Task<string> PrepareValidatedAsync(Installation installation, string dataRoot, IProgress<CopyProgress>? progress, CancellationToken token, Action<string> validate)
     {
         token.ThrowIfCancellationRequested();
-        var target = Path.Combine(Path.GetFullPath(dataRoot), "clients", profile.Id.ToString("N"));
+        var target = Target(dataRoot);
         EnsureDisjoint(installation.Path, target);
         SafePaths.CheckTree(target);
         if (Directory.Exists(target))
             throw new IOException("ErrorCopyExists");
-        if (profile.Slot is < 1 or > 65535)
-            throw new InvalidOperationException("ErrorProfileIdentity");
         var files = EnumerateFiles(installation.Path).ToArray();
         var total = files.Sum(p => new FileInfo(p).Length);
         var drive = new DriveInfo(Path.GetPathRoot(target)!);
         if (drive.AvailableFreeSpace < total + 64L * 1024 * 1024)
             throw new IOException("ErrorDiskSpace");
-        var staging = Path.Combine(Path.GetDirectoryName(target)!, $".{profile.Id:N}.{Guid.NewGuid():N}.preparing");
+        var staging = Path.Combine(Path.GetDirectoryName(target)!, $".shared.{Guid.NewGuid():N}.preparing");
         EnsureDisjoint(installation.Path, staging);
         SafePaths.CheckTree(staging);
         try
@@ -58,8 +57,9 @@ public static class ClientPreparation
             var identity = await File.ReadAllLinesAsync(info, token);
             if (identity.Length != 2)
                 throw new IOException("ErrorClientIdentity");
-            var product = "P" + profile.Slot.ToString("X4");
-            const string company = "Krscli";
+            var identityId = Guid.NewGuid().ToString("N");
+            var company = "K" + identityId[..5];
+            var product = "S" + identityId[5..9];
             var settings = Path.Combine(staging, "Dofus_Data", "globalgamemanagers");
             var bytes = await File.ReadAllBytesAsync(settings, token);
             var original = Serialized(identity[0]).Concat(Serialized(identity[1])).ToArray();
@@ -68,7 +68,7 @@ public static class ClientPreparation
             await File.WriteAllBytesAsync(settings, bytes, token);
             await File.WriteAllTextAsync(info, company + "\n" + product + "\n", new UTF8Encoding(false), token);
             token.ThrowIfCancellationRequested();
-            await File.WriteAllTextAsync(Path.Combine(staging, "krosforge-client.json"), JsonSerializer.Serialize(new PreparedClient(profile.Id, installation.Build, company, product)), token);
+            await File.WriteAllTextAsync(Path.Combine(staging, "krosforge-client.json"), JsonSerializer.Serialize(new PreparedClient(2, installation.Build, company, product)), token);
             token.ThrowIfCancellationRequested();
             Directory.Move(staging, target);
         }

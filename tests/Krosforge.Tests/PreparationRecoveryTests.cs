@@ -8,10 +8,9 @@ namespace Krosforge.Tests;
 public sealed class PreparationRecoveryTests : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "preparation-test-" + Guid.NewGuid().ToString("N"));
-    private readonly Profile profile = new(Guid.NewGuid(), "Test", 1);
     private string Source => Path.Combine(root, "source");
     private string Data => Path.Combine(root, "data");
-    private string Target => Path.Combine(Data, "clients", profile.Id.ToString("N"));
+    private string Target => ClientPreparation.Target(Data);
     public PreparationRecoveryTests()
     {
         Directory.CreateDirectory(Path.Combine(Source, "Dofus_Data"));
@@ -31,7 +30,7 @@ public sealed class PreparationRecoveryTests : IDisposable
         Assert.Equal(Identity(), File.ReadAllBytes(Path.Combine(directory, "Dofus_Data", "globalgamemanagers")));
     }
     private Task<string> Prepare(IProgress<CopyProgress>? progress = null, CancellationToken token = default, Action<string>? validate = null) =>
-        ClientPreparation.PrepareValidatedAsync(new Installation(Source, "synthetic"), Data, profile, progress, token, validate ?? ValidateFixture);
+        ClientPreparation.PrepareValidatedAsync(new Installation(Source, "synthetic"), Data, progress, token, validate ?? ValidateFixture);
 
     [Theory]
     [InlineData(false)]
@@ -54,8 +53,8 @@ public sealed class PreparationRecoveryTests : IDisposable
         ValidateFixture(Source);
         Assert.Equal(Target, await Prepare(token: TestContext.Current.CancellationToken));
         var metadata = JsonSerializer.Deserialize<PreparedClient>(await File.ReadAllTextAsync(Path.Combine(Target, "krosforge-client.json"), TestContext.Current.CancellationToken))!;
-        Assert.Equal(profile.Id, metadata.ProfileId);
-        Assert.Equal("Krscli\nP0001\n", File.ReadAllText(Path.Combine(Target, "Dofus_Data", "app.info")));
+        Assert.Equal(2, metadata.Layout);
+        Assert.Equal(metadata.Company + "\n" + metadata.Product + "\n", File.ReadAllText(Path.Combine(Target, "Dofus_Data", "app.info")));
         ValidateFixture(Source);
     }
 

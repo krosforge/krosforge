@@ -41,6 +41,7 @@ public static class SafePaths
     {
         var target = Path.Combine(root, "clients", id.ToString("N"));
         DeleteOwnedDirectory(target);
+        DeleteOwnedDirectory(Path.Combine(root, "logs", id.ToString("N")));
     }
     internal static void DeleteOwnedDirectory(string target)
     {

@@ -132,7 +132,7 @@ Versão {0}</value>
     <value>Opções do perfil</value>
   </data>
   <data name="DeleteConfirmation" xml:space="preserve">
-    <value>A conta, seus personagens e sua cópia privada serão removidos.
+    <value>A conta, seus personagens e seus dados locais serão removidos.
 Digite “{0}” para confirmar.</value>
   </data>
   <data name="LicensesRepository" xml:space="preserve">
@@ -172,7 +172,7 @@ Digite “{0}” para confirmar.</value>
     <value>A cópia contém links; a limpeza foi interrompida.</value>
   </data>
   <data name="ErrorCopyExists" xml:space="preserve">
-    <value>A cópia do perfil já existe.</value>
+    <value>A cópia compartilhada do cliente já existe.</value>
   </data>
   <data name="ErrorProfileIdentity" xml:space="preserve">
     <value>Identidade de perfil fora do intervalo suportado.</value>
@@ -316,7 +316,7 @@ Digite “{0}” para confirmar.</value>
     <value>A preparação do jogo foi cancelada.</value>
   </data>
   <data name="LaunchPreparing" xml:space="preserve">
-    <value>Preparando os arquivos do perfil…</value>
+    <value>Preparando os arquivos do cliente…</value>
   </data>
   <data name="LaunchAuthenticating" xml:space="preserve">
     <value>Conectando o perfil ao servidor local…</value>

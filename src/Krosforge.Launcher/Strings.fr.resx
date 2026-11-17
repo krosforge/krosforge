@@ -132,7 +132,7 @@ Version {0}</value>
     <value>Options du profil</value>
   </data>
   <data name="DeleteConfirmation" xml:space="preserve">
-    <value>Le compte, ses personnages et sa copie privée seront supprimés.
+    <value>Le compte, ses personnages et ses données locales seront supprimés.
 Saisissez « {0} » pour confirmer.</value>
   </data>
   <data name="LicensesRepository" xml:space="preserve">
@@ -172,7 +172,7 @@ Saisissez « {0} » pour confirmer.</value>
     <value>La copie contient des liens ; le nettoyage a été interrompu.</value>
   </data>
   <data name="ErrorCopyExists" xml:space="preserve">
-    <value>Une copie existe déjà pour ce profil.</value>
+    <value>La copie partagée du client existe déjà.</value>
   </data>
   <data name="ErrorProfileIdentity" xml:space="preserve">
     <value>L’identifiant du profil est hors de la plage prise en charge.</value>
@@ -316,7 +316,7 @@ Saisissez « {0} » pour confirmer.</value>
     <value>La préparation du jeu a été annulée.</value>
   </data>
   <data name="LaunchPreparing" xml:space="preserve">
-    <value>Préparation des fichiers du profil…</value>
+    <value>Préparation des fichiers du client…</value>
   </data>
   <data name="LaunchAuthenticating" xml:space="preserve">
     <value>Connexion du profil au serveur local…</value>

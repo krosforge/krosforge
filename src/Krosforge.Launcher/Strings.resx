@@ -132,7 +132,7 @@ Version {0}</value>
     <value>Profile options</value>
   </data>
   <data name="DeleteConfirmation" xml:space="preserve">
-    <value>The account, its characters, and its private copy will be removed.
+    <value>The account, its characters, and its local data will be removed.
 Type “{0}” to confirm.</value>
   </data>
   <data name="LicensesRepository" xml:space="preserve">
@@ -172,7 +172,7 @@ Type “{0}” to confirm.</value>
     <value>The copy contains links; cleanup was stopped.</value>
   </data>
   <data name="ErrorCopyExists" xml:space="preserve">
-    <value>A copy already exists for this profile.</value>
+    <value>The shared client copy already exists.</value>
   </data>
   <data name="ErrorProfileIdentity" xml:space="preserve">
     <value>The profile identity is outside the supported range.</value>
@@ -316,7 +316,7 @@ Type “{0}” to confirm.</value>
     <value>Game preparation was canceled.</value>
   </data>
   <data name="LaunchPreparing" xml:space="preserve">
-    <value>Preparing the profile files…</value>
+    <value>Preparing the client files…</value>
   </data>
   <data name="LaunchAuthenticating" xml:space="preserve">
     <value>Connecting the profile to the local server…</value>
