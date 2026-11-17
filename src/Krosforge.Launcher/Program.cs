@@ -7,6 +7,11 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--apply-update")
+        {
+            Environment.ExitCode = Updates.UpdateInstaller.RunHelperAsync(args[1]).GetAwaiter().GetResult();
+            return;
+        }
         if (args.Length > 0 && args[0] == "--runtime")
         {
             Environment.ExitCode = Krosforge.Runtime.RuntimeEntry.RunAsync(args[1..]).GetAwaiter().GetResult();

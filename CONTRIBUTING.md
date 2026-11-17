@@ -47,6 +47,14 @@ On Windows, verify the packaged executable and portable data persistence:
 
 The Windows smoke test uses a temporary copy of the package. It checks profile persistence after moving the folder and can open and close the application window. This verifies the launcher, not game integration.
 
+The Windows updater has a separate integration test using two published test packages:
+
+```powershell
+./tests/PowerShell/UpdateInstaller.Tests.ps1 -CurrentPackage .artifacts/update-current -CandidatePackage .artifacts/update-candidate
+```
+
+Both folders must contain a self-contained `Krosforge.exe` built with updater support. The test copies them into temporary directories and checks successful replacement, startup acknowledgement, preserved data, and rollback when a candidate cannot start. It does not publish a release or replace your working installation.
+
 ## Translations
 
 Launcher text lives in `Strings.resx` (English) and the `fr`, `de`, `es`, and `pt` resource files. Keep the same keys and format arguments in every language; the localization tests verify both. Use `Text.Get` when creating dialogs and the `LocalizedAction` / `LocalizedLabel` helpers for persistent controls that must update when the user changes languages.
@@ -58,6 +66,10 @@ Expected runtime and domain failures use stable resource identifiers, which the 
 `packaging/publish.ps1` builds a self-contained Windows x64 executable and creates `.artifacts/Krosforge-<version>-win-x64-portable.zip`. The ZIP must contain only `Krosforge.exe`. Licenses and dependencies are embedded in the executable.
 
 To publish a release, maintainers run the **Release** workflow with a version and provide `release-notes/<version>.md` in the selected commit. The workflow tests, builds, and publishes the portable ZIP, checksums, and a source archive. It does not publish a standalone launcher executable.
+
+The updater reads the latest stable release from the public GitHub API. A compatible release must include the exact `Krosforge-<version>-win-x64-portable.zip` asset and `SHA256SUMS`. Downloads are limited to GitHub HTTPS hosts, verified against the checksum, and restricted to a ZIP containing only `Krosforge.exe`. Checksums provide download integrity; they are not a code-signing identity.
+
+Updates are opt-in. A helper copied from the running launcher waits for that exact process to exit, verifies both binaries again, and replaces only the launcher executable. It retains the old executable until the new launcher acknowledges that its window opened. Failed restarts restore the backup. Native game processes and user data are not update targets.
 
 Keep user-facing instructions in the README and version-specific capabilities and limitations in the release notes.
 
