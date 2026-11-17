@@ -8,7 +8,7 @@
 
 Krosforge is an open-source desktop launcher that brings local accounts, client setup, and session controls into one portable application. Use your own client installation, keep your profiles on your computer, and manage multiple accounts from a single window.
 
-[Download](https://github.com/krosforge/krosforge/releases) · [Release notes](release-notes/0.0.1.md) · [Report an issue](https://github.com/krosforge/krosforge/issues) · [Contribute](CONTRIBUTING.md)
+[Download](https://github.com/krosforge/krosforge/releases) · [Release notes](release-notes/0.0.2.md) · [Report an issue](https://github.com/krosforge/krosforge/issues) · [Contribute](CONTRIBUTING.md)
 
 Check the release notes for the gameplay features and compatibility covered by each version before downloading.
 
@@ -90,7 +90,7 @@ No. The launcher starts its local runtime and manages its SQLite database automa
 
 **Where can I check gameplay and multiplayer support?**
 
-Read the [release notes](release-notes/0.0.1.md) for the version you are using. They document supported features, client compatibility, and limitations.
+Read the [release notes](release-notes/0.0.2.md) for the version you are using. They document supported features, client compatibility, and limitations.
 
 **Why are there files in the system's temporary folder?**
 
