@@ -20,14 +20,14 @@ public static class ClientPreparation
         EnsureDisjoint(installation.Path, target);
         SafePaths.CheckTree(target);
         if (Directory.Exists(target))
-            throw new IOException("A cópia do perfil já existe.");
+            throw new IOException("ErrorCopyExists");
         if (profile.Slot is < 1 or > 65535)
-            throw new InvalidOperationException("Identidade de perfil fora do intervalo suportado.");
+            throw new InvalidOperationException("ErrorProfileIdentity");
         var files = EnumerateFiles(installation.Path).ToArray();
         var total = files.Sum(p => new FileInfo(p).Length);
         var drive = new DriveInfo(Path.GetPathRoot(target)!);
         if (drive.AvailableFreeSpace < total + 64L * 1024 * 1024)
-            throw new IOException("Não há espaço suficiente para preparar a cópia.");
+            throw new IOException("ErrorDiskSpace");
         var staging = Path.Combine(Path.GetDirectoryName(target)!, $".{profile.Id:N}.{Guid.NewGuid():N}.preparing");
         EnsureDisjoint(installation.Path, staging);
         SafePaths.CheckTree(staging);
@@ -57,7 +57,7 @@ public static class ClientPreparation
             var info = Path.Combine(staging, "Dofus_Data", "app.info");
             var identity = await File.ReadAllLinesAsync(info, token);
             if (identity.Length != 2)
-                throw new IOException("Identidade do cliente inválida.");
+                throw new IOException("ErrorClientIdentity");
             var product = "P" + profile.Slot.ToString("X4");
             const string company = "Krscli";
             var settings = Path.Combine(staging, "Dofus_Data", "globalgamemanagers");
@@ -83,7 +83,7 @@ public static class ClientPreparation
         source = Path.TrimEndingDirectorySeparator(Path.GetFullPath(source));
         target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(target));
         if (source.Equals(target, StringComparison.OrdinalIgnoreCase) || source.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || target.StartsWith(source + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            throw new IOException("Origem e destino precisam ser pastas independentes.");
+            throw new IOException("ErrorIndependentFolders");
     }
     private static IEnumerable<string> EnumerateFiles(string root)
     {
@@ -94,7 +94,7 @@ public static class ClientPreparation
         {
             var attributes = File.GetAttributes(entry);
             if ((attributes & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("A instalação contém links.");
+                throw new IOException("ErrorInstallationLinks");
             if ((attributes & FileAttributes.Directory) != 0)
                 pending.Push(entry);
             else
@@ -109,17 +109,17 @@ public static class ClientPreparation
     public static void ReplaceUnique(byte[] data, byte[] expected, byte[] replacement)
     {
         if (expected.Length == 0 || expected.Length != replacement.Length)
-            throw new IOException("Identidade serializada incompatível.");
+            throw new IOException("ErrorSerializedIdentity");
         var found = -1;
         for (var i = 0; i <= data.Length - expected.Length; i++)
         if (data.AsSpan(i, expected.Length).SequenceEqual(expected))
         {
             if (found >= 0)
-                throw new IOException("Identidade serializada ambígua.");
+                throw new IOException("ErrorAmbiguousIdentity");
             found = i;
         }
         if (found < 0)
-            throw new IOException("Identidade serializada ausente.");
+            throw new IOException("ErrorMissingIdentity");
         replacement.CopyTo(data, found);
     }
 }

@@ -47,6 +47,12 @@ On Windows, verify the packaged executable and portable data persistence:
 
 The Windows smoke test uses a temporary copy of the package. It checks profile persistence after moving the folder and can open and close the application window. This verifies the launcher, not game integration.
 
+## Translations
+
+Launcher text lives in `Strings.resx` (English) and the `fr`, `de`, `es`, and `pt` resource files. Keep the same keys and format arguments in every language; the localization tests verify both. Use `Text.Get` when creating dialogs and the `LocalizedAction` / `LocalizedLabel` helpers for persistent controls that must update when the user changes languages.
+
+Expected runtime and domain failures use stable resource identifiers, which the launcher translates at the UI boundary. Unknown system errors are presented with a localized fallback rather than showing raw messages or untranslated identifiers. `Text.Culture` contains the selected launcher language; it does not change the process-wide culture.
+
 ## Packaging and releases
 
 `packaging/publish.ps1` builds a self-contained Windows x64 executable and creates `.artifacts/Krosforge-<version>-win-x64-portable.zip`. The ZIP must contain only `Krosforge.exe`. Licenses and dependencies are embedded in the executable.

@@ -29,7 +29,7 @@ public sealed class RuntimeClient : IRuntimeConnection
     {
         if (await TryConnectAsync(250))
             return;
-        var executable = Environment.ProcessPath ?? throw new IOException("Não foi possível localizar o aplicativo.");
+        var executable = Environment.ProcessPath ?? throw new IOException("ErrorExecutableMissing");
         var start = new ProcessStartInfo(executable)
         {
             UseShellExecute = false,
@@ -43,7 +43,7 @@ public sealed class RuntimeClient : IRuntimeConnection
         start.ArgumentList.Add(dataDirectory);
         using var process = Process.Start(start);
         if (!await TryConnectAsync(15000))
-            throw new IOException("Não foi possível iniciar o runtime local.");
+            throw new IOException("ErrorRuntimeStart");
     }
     private async Task<bool> TryConnectAsync(int timeout)
     {
@@ -74,13 +74,13 @@ public sealed class RuntimeClient : IRuntimeConnection
             if (!result.Success)
                 throw new InvalidOperationException(result.Error);
             if (result.Data is not { } data || data.ValueKind == JsonValueKind.Null)
-                throw new IOException("O runtime retornou uma resposta vazia.");
-            return data.Deserialize<T>() ?? throw new IOException("O runtime retornou uma resposta vazia.");
+                throw new IOException("ErrorEmptyResponse");
+            return data.Deserialize<T>() ?? throw new IOException("ErrorEmptyResponse");
         }
         catch (JsonException error)
         {
             ResetConnection();
-            throw new IOException("O runtime retornou uma resposta inválida.", error);
+            throw new IOException("ErrorInvalidResponse", error);
         }
         catch (Exception error) when (error is IOException or OperationCanceledException)
         {

@@ -18,7 +18,7 @@ public sealed class ProfileStore : IDisposable
         if (current > 1)
         {
             db.Dispose();
-            throw new InvalidOperationException("Este banco exige uma versão mais recente do aplicativo.");
+            throw new InvalidOperationException("ErrorDatabaseVersion");
         }
         Execute("""
             BEGIN IMMEDIATE;
@@ -69,7 +69,7 @@ public sealed class ProfileStore : IDisposable
             c.ExecuteNonQuery();
             tx.Commit();
         }
-        catch (SqliteException e) when (e.SqliteErrorCode == 19) { throw new ArgumentException("Já existe um perfil com esse apelido."); }
+        catch (SqliteException e) when (e.SqliteErrorCode == 19) { throw new ArgumentException("ErrorDuplicateProfile"); }
         return new(id, name, slot);
     }
     public void Rename(Guid id, string name)
@@ -83,9 +83,9 @@ public sealed class ProfileStore : IDisposable
         try
         {
             if (c.ExecuteNonQuery() != 1)
-                throw new ArgumentException("Perfil não encontrado.");
+                throw new ArgumentException("ErrorProfileNotFound");
         }
-        catch (SqliteException e) when (e.SqliteErrorCode == 19) { throw new ArgumentException("Já existe um perfil com esse apelido."); }
+        catch (SqliteException e) when (e.SqliteErrorCode == 19) { throw new ArgumentException("ErrorDuplicateProfile"); }
     }
     public void Delete(Guid id, string confirmation)
     {
@@ -94,9 +94,9 @@ public sealed class ProfileStore : IDisposable
         c.Transaction = tx;
         c.CommandText = "SELECT name FROM profiles WHERE id=$id";
         c.Parameters.AddWithValue("$id", id.ToString());
-        var name = c.ExecuteScalar() as string ?? throw new ArgumentException("Perfil não encontrado.");
+        var name = c.ExecuteScalar() as string ?? throw new ArgumentException("ErrorProfileNotFound");
         if (!string.Equals(name, confirmation, StringComparison.Ordinal))
-            throw new ArgumentException("Digite o apelido exato para confirmar a exclusão.");
+            throw new ArgumentException("ErrorDeleteConfirmation");
         c.CommandText = "INSERT OR IGNORE INTO cleanup VALUES($id); DELETE FROM profiles WHERE id=$id";
         c.ExecuteNonQuery();
         tx.Commit();

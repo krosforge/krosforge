@@ -41,11 +41,17 @@ The launcher includes its dependencies and starts its local runtime automaticall
 
 ### Set up your profiles
 
-1. Check the installation card. If no compatible client is found, use **Selecionar pasta** (Select folder) to choose the client installation folder.
-2. Choose **Criar perfil** (Create profile) and enter a name for your local account.
+1. Check the installation card. If no compatible client is found, use the folder selection button to choose the client installation folder.
+2. Use the create-profile button and enter a name for your local account.
 3. Repeat for any additional accounts, then select the profiles you want to use for a session.
 
 Use a profile's **•••** menu to rename or delete it. Deletion requires typing the profile name and removes its associated records and application-owned copies. Back up your data before deleting a profile you may want to keep.
+
+## Language
+
+The launcher supports **Français, English, Deutsch, Español, and Português**. It automatically uses your computer’s display language, including regional variants such as French Canadian or Brazilian Portuguese. If that language is not supported, it uses English.
+
+Use the language button in the header to choose a language or return to automatic selection. The change applies immediately without closing your session or changing your selected profiles. Your preference is saved in `Krosforge-data/launcher-preferences.json` and travels with your portable data.
 
 ## Your data
 
@@ -95,6 +101,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, tests, packaging, 
 
 ## License and content
 
-Original code and the application icon are licensed under [GPL-3.0-only](LICENSE). Dependencies retain their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Bundled licenses can also be exported using the launcher's **Licenças** (Licenses) button.
+Original code and the application icon are licensed under [GPL-3.0-only](LICENSE). Dependencies retain their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Bundled licenses can also be exported using the launcher's licenses button.
 
 No game client, extracted assets, or credentials are included in this repository or its distribution packages. The client installation you select is a separate local source. Krosforge is an independent project and is not affiliated with the publisher of that client.

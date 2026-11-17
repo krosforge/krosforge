@@ -18,7 +18,7 @@ public static class Wire
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(value);
         if (bytes.Length > MaximumFrameBytes)
-            throw new InvalidDataException("Mensagem excede o limite.");
+            throw new InvalidDataException("ErrorFrameSize");
         var size = new byte[4];
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(size, bytes.Length);
         await stream.WriteAsync(size, token);
@@ -31,10 +31,10 @@ public static class Wire
         await stream.ReadExactlyAsync(size, token);
         var length = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(size);
         if (length is <= 0 or > MaximumFrameBytes)
-            throw new InvalidDataException("Mensagem inválida.");
+            throw new InvalidDataException("ErrorInvalidMessage");
         var bytes = new byte[length];
         await stream.ReadExactlyAsync(bytes, token);
-        return JsonSerializer.Deserialize<T>(bytes) ?? throw new InvalidDataException("Mensagem vazia.");
+        return JsonSerializer.Deserialize<T>(bytes) ?? throw new InvalidDataException("ErrorEmptyMessage");
     }
 }
 public static class AppPaths

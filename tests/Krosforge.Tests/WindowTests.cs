@@ -23,7 +23,7 @@ public sealed class WindowTests
         var window = new MainWindow(connection);
         window.Show();
         Assert.Equal(4, window.GetVisualDescendants().OfType<CheckBox>().Count());
-        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Abrir selecionados"));
+        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, Text.Get("OpenSelected")));
         Assert.Equal(new[] { "snapshot" }, connection.Operations);
         window.Close();
     }
@@ -37,7 +37,7 @@ public sealed class WindowTests
         checks[0].IsChecked = false;
         checks[1].IsChecked = true;
         checks[3].IsChecked = true;
-        var play = window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, "Abrir selecionados"));
+        var play = window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Text.Get("OpenSelected")));
         Assert.True(play.IsEnabled);
         play.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(new[] { connection.Profiles[1].Id, connection.Profiles[3].Id }.Order(), connection.Launched.Order());
@@ -49,7 +49,7 @@ public sealed class WindowTests
         var window = new MainWindow(new Connection());
         window.Show();
         foreach (var check in window.GetVisualDescendants().OfType<CheckBox>()) check.IsChecked = false;
-        Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, "Abrir selecionados")).IsEnabled);
+        Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Text.Get("OpenSelected"))).IsEnabled);
         window.Close();
     }
     [AvaloniaFact]
@@ -58,8 +58,8 @@ public sealed class WindowTests
         var window = new MainWindow(new Connection { Installation = null });
         window.Show();
         Assert.Equal(4, window.GetVisualDescendants().OfType<CheckBox>().Count());
-        Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, "Abrir selecionados")).IsEnabled);
-        Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), b => b.Text == "SELECIONE UMA INSTALAÇÃO");
+        Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Text.Get("OpenSelected"))).IsEnabled);
+        Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), b => b.Text == Text.Get("ClientMissing"));
         window.Close();
     }
     [AvaloniaFact]
@@ -69,8 +69,8 @@ public sealed class WindowTests
         var window = new MainWindow(connection);
         window.Show();
         Assert.Empty(window.GetVisualDescendants().OfType<CheckBox>());
-        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Criar perfil"));
-        Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), b => b.Text == "Um novo começo");
+        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, Text.Get("CreateProfile")));
+        Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), b => b.Text == Text.Get("NoProfiles"));
         Assert.Equal(new[] { "snapshot" }, connection.Operations);
         window.Close();
     }

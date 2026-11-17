@@ -11,10 +11,10 @@ public static class ClientInstallation
         SafePaths.CheckTree(path);
         var version = Path.Combine(path, "Dofus_Data", "StreamingAssets", "version");
         if (!File.Exists(Path.Combine(path, "Dofus.exe")) || !File.Exists(Path.Combine(path, "GameAssembly.dll")) || !File.Exists(version))
-            throw new ArgumentException("Selecione uma instalação completa e compatível.");
+            throw new ArgumentException("ErrorCompleteInstallation");
         var lines = File.ReadAllLines(version).Where(x => x.StartsWith("Version=", StringComparison.Ordinal)).ToArray();
         if (lines.Length != 1 || lines[0] != "Version=" + SupportedBuild)
-            throw new ArgumentException("A instalação precisa corresponder à versão " + SupportedBuild + ".");
+            throw new ArgumentException("ErrorClientBuild");
         ClientCompatibility.Validate(path);
         return new(path, SupportedBuild);
     }
@@ -35,7 +35,7 @@ public static class SafePaths
     {
         for (var item = new DirectoryInfo(Path.GetFullPath(path)); item != null; item = item.Parent)
             if (item.Exists && (item.Attributes & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("O caminho não pode atravessar links ou junctions.");
+                throw new IOException("ErrorUnsafePath");
     }
     public static void DeleteOwnedProfile(string root, Guid id)
     {
@@ -54,7 +54,7 @@ public static class SafePaths
         {
             var attributes = File.GetAttributes(entry);
             if ((attributes & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("A cópia contém links; a limpeza foi interrompida.");
+                throw new IOException("ErrorUnsafeCopy");
             if ((attributes & FileAttributes.Directory) != 0)
                 stack.Push(entry);
         }
