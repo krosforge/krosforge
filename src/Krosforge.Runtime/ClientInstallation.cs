@@ -40,6 +40,10 @@ public static class SafePaths
     public static void DeleteOwnedProfile(string root, Guid id)
     {
         var target = Path.Combine(root, "clients", id.ToString("N"));
+        DeleteOwnedDirectory(target);
+    }
+    internal static void DeleteOwnedDirectory(string target)
+    {
         CheckTree(target);
         if (!Directory.Exists(target))
             return;

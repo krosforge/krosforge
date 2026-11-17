@@ -9,7 +9,13 @@ public static class ClientPreparation
 {
     public static async Task<string> PrepareAsync(string source, string dataRoot, Profile profile, IProgress<CopyProgress>? progress, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         var installation = ClientInstallation.Inspect(source);
+        return await PrepareValidatedAsync(installation, dataRoot, profile, progress, token, ClientCompatibility.Validate);
+    }
+    internal static async Task<string> PrepareValidatedAsync(Installation installation, string dataRoot, Profile profile, IProgress<CopyProgress>? progress, CancellationToken token, Action<string> validate)
+    {
+        token.ThrowIfCancellationRequested();
         var target = Path.Combine(Path.GetFullPath(dataRoot), "clients", profile.Id.ToString("N"));
         EnsureDisjoint(installation.Path, target);
         SafePaths.CheckTree(target);
@@ -22,42 +28,54 @@ public static class ClientPreparation
         var drive = new DriveInfo(Path.GetPathRoot(target)!);
         if (drive.AvailableFreeSpace < total + 64L * 1024 * 1024)
             throw new IOException("Não há espaço suficiente para preparar a cópia.");
-        Directory.CreateDirectory(target);
-        long copied = 0;
-        foreach (var file in files)
+        var staging = Path.Combine(Path.GetDirectoryName(target)!, $".{profile.Id:N}.{Guid.NewGuid():N}.preparing");
+        EnsureDisjoint(installation.Path, staging);
+        SafePaths.CheckTree(staging);
+        try
         {
-            token.ThrowIfCancellationRequested();
-            var destination = Path.Combine(target, Path.GetRelativePath(installation.Path, file));
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            await using var input = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, true);
-            await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, true);
-            var buffer = new byte[128 * 1024];
-            int count;
-            while ((count = await input.ReadAsync(buffer, token)) != 0)
+            Directory.CreateDirectory(staging);
+            long copied = 0;
+            foreach (var file in files)
             {
-                await output.WriteAsync(buffer.AsMemory(0, count), token);
-                copied += count;
-                progress?.Report(new(copied, total));
+                token.ThrowIfCancellationRequested();
+                var destination = Path.Combine(staging, Path.GetRelativePath(installation.Path, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                await using var input = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, true);
+                await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, true);
+                var buffer = new byte[128 * 1024];
+                int count;
+                while ((count = await input.ReadAsync(buffer, token)) != 0)
+                {
+                    await output.WriteAsync(buffer.AsMemory(0, count), token);
+                    copied += count;
+                    progress?.Report(new(copied, total));
+                }
             }
+            token.ThrowIfCancellationRequested();
+            validate(installation.Path);
+            validate(staging);
+            var info = Path.Combine(staging, "Dofus_Data", "app.info");
+            var identity = await File.ReadAllLinesAsync(info, token);
+            if (identity.Length != 2)
+                throw new IOException("Identidade do cliente inválida.");
+            var product = "P" + profile.Slot.ToString("X4");
+            const string company = "Krscli";
+            var settings = Path.Combine(staging, "Dofus_Data", "globalgamemanagers");
+            var bytes = await File.ReadAllBytesAsync(settings, token);
+            var original = Serialized(identity[0]).Concat(Serialized(identity[1])).ToArray();
+            var replacement = Serialized(company).Concat(Serialized(product)).ToArray();
+            ReplaceUnique(bytes, original, replacement);
+            await File.WriteAllBytesAsync(settings, bytes, token);
+            await File.WriteAllTextAsync(info, company + "\n" + product + "\n", new UTF8Encoding(false), token);
+            token.ThrowIfCancellationRequested();
+            await File.WriteAllTextAsync(Path.Combine(staging, "krosforge-client.json"), JsonSerializer.Serialize(new PreparedClient(profile.Id, installation.Build, company, product)), token);
+            token.ThrowIfCancellationRequested();
+            Directory.Move(staging, target);
         }
-        token.ThrowIfCancellationRequested();
-        ClientCompatibility.Validate(installation.Path);
-        ClientCompatibility.Validate(target);
-        var info = Path.Combine(target, "Dofus_Data", "app.info");
-        var identity = await File.ReadAllLinesAsync(info, token);
-        if (identity.Length != 2)
-            throw new IOException("Identidade do cliente inválida.");
-        var product = "P" + profile.Slot.ToString("X4");
-        const string company = "Krscli";
-        var settings = Path.Combine(target, "Dofus_Data", "globalgamemanagers");
-        var bytes = await File.ReadAllBytesAsync(settings, token);
-        var original = Serialized(identity[0]).Concat(Serialized(identity[1])).ToArray();
-        var replacement = Serialized(company).Concat(Serialized(product)).ToArray();
-        ReplaceUnique(bytes, original, replacement);
-        await File.WriteAllBytesAsync(settings, bytes, token);
-        await File.WriteAllTextAsync(info, company + "\n" + product + "\n", new UTF8Encoding(false), token);
-        token.ThrowIfCancellationRequested();
-        await File.WriteAllTextAsync(Path.Combine(target, "krosforge-client.json"), JsonSerializer.Serialize(new PreparedClient(profile.Id, installation.Build, company, product)), token);
+        finally
+        {
+            SafePaths.DeleteOwnedDirectory(staging);
+        }
         return target;
     }
     public static void EnsureDisjoint(string source, string target)
