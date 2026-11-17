@@ -1,15 +1,19 @@
 using Krosforge.Contracts;
+using Krosforge.Runtime.Native;
 namespace Krosforge.Runtime;
 
 public sealed class RuntimeService : IDisposable
 {
     private readonly ProfileStore store;
     private readonly string directory;
+    private readonly ClientLaunchManager launches;
+    public bool HasActiveClients => launches.HasActiveClients;
     public RuntimeService(string directory)
     {
         this.directory = directory;
         SafePaths.CheckTree(directory);
         store = new(directory);
+        launches = new(directory);
         Cleanup();
     }
     public Response Handle(Request request)
@@ -23,7 +27,7 @@ public sealed class RuntimeService : IDisposable
                 case "ping": return Response.Ok(true);
                 case "snapshot":
                     var installation = ClientInstallation.Discover(store.Setting("installation"));
-                    return Response.Ok(new Snapshot(store.List(), installation));
+                    return Response.Ok(new Snapshot(store.List(), installation, HasActiveClients));
                 case "installation":
                     var selected = ClientInstallation.Inspect(request.Value ?? "");
                     store.SetSetting("installation", selected.Path);
@@ -34,15 +38,16 @@ public sealed class RuntimeService : IDisposable
                     store.Rename(RequireId(request), request.Value ?? "");
                     return Response.Ok(true);
                 case "delete":
+                    if (launches.Status(RequireId(request)).Stage is "preparing" or "starting" or "authenticating" or "server-selection") return Response.Fail("ErrorCloseGameFirst");
                     store.Delete(RequireId(request), request.Confirmation ?? "");
                     Cleanup();
                     return Response.Ok(true);
                 case "launch":
-                    if (!store.List().Any(p => p.Id == RequireId(request)))
-                        return Response.Fail("ErrorProfileNotFound");
-                    if (ClientInstallation.Discover(store.Setting("installation")) is null)
-                        return Response.Fail("ErrorSelectInstallation");
-                    return Response.Fail("ErrorSessionFailed");
+                    var profile = store.List().SingleOrDefault(p => p.Id == RequireId(request));
+                    if (profile is null) return Response.Fail("ErrorProfileNotFound");
+                    return Response.Ok(launches.Start(profile, store.Setting("installation") ?? ClientInstallation.DefaultPath, request.Value ?? "en"));
+                case "launch-status": return Response.Ok(launches.Status(RequireId(request)));
+                case "cancel-launch": return Response.Ok(launches.Cancel(RequireId(request)));
                 default:
                     return Response.Fail("ErrorUnknownOperation");
             }
@@ -64,5 +69,5 @@ public sealed class RuntimeService : IDisposable
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
-    public void Dispose() => store.Dispose();
+    public void Dispose() { launches.Dispose(); store.Dispose(); }
 }

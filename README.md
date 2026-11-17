@@ -8,7 +8,7 @@
 
 Krosforge is an open-source desktop launcher that brings local accounts, client setup, and session controls into one portable application. Use your own client installation, keep your profiles on your computer, and manage multiple accounts from a single window.
 
-[Download](https://github.com/krosforge/krosforge/releases) · [Release notes](release-notes/0.0.1.md) · [Report an issue](https://github.com/krosforge/krosforge/issues) · [Contribute](CONTRIBUTING.md)
+[Download](https://github.com/krosforge/krosforge/releases) · [Release notes](release-notes/0.0.2.md) · [Report an issue](https://github.com/krosforge/krosforge/issues) · [Contribute](CONTRIBUTING.md)
 
 Check the release notes for the gameplay features and compatibility covered by each version before downloading.
 
@@ -26,7 +26,7 @@ Check the release notes for the gameplay features and compatibility covered by e
 
 - A Windows x64 computer.
 - Your own compatible client installation. The reference build is **3.7.14.18**.
-- A writable folder for the launcher and its data.
+- A writable folder for the launcher and its data, with enough free space for one complete shared client copy.
 
 The download contains the launcher only. Game files are not included.
 
@@ -44,8 +44,9 @@ The launcher includes its dependencies and starts its local runtime automaticall
 1. Check the installation card. If no compatible client is found, use the folder selection button to choose the client installation folder.
 2. Use the create-profile button and enter a name for your local account.
 3. Repeat for any additional accounts, then select the profiles you want to use for a session.
+4. Choose **Abrir selecionados** (Open selected). The launcher prepares one private client copy shared by all profiles and opens the game. Preparation shows progress and can be canceled. Keep the launcher open while its game windows are active.
 
-Use a profile's **•••** menu to rename or delete it. Deletion requires typing the profile name and removes its associated records and application-owned copies. Back up your data before deleting a profile you may want to keep.
+Use a profile's **•••** menu to rename or delete it. Deletion requires typing the profile name and removes its associated records and profile data; the shared client copy is kept. Back up your data before deleting a profile you may want to keep.
 
 ## Language
 
@@ -63,7 +64,7 @@ Krosforge/
 └── Krosforge-data/
 ```
 
-`Krosforge-data` holds your profiles, settings, and local database. No `portable` marker file is needed.
+`Krosforge-data` holds your profiles, settings, local database, and the shared client copy. The native client may also create Unity caches outside this folder; these are not part of a launcher-folder backup. No `portable` marker file is needed.
 
 **To back up or move the launcher:** close it, then copy the entire folder, including `Krosforge-data`.
 
@@ -89,7 +90,7 @@ No. The launcher starts its local runtime and manages its SQLite database automa
 
 **Where can I check gameplay and multiplayer support?**
 
-Read the [release notes](release-notes/0.0.1.md) for the version you are using. They document supported features, client compatibility, and limitations.
+Read the [release notes](release-notes/0.0.2.md) for the version you are using. They document supported features, client compatibility, and limitations.
 
 **Why are there files in the system's temporary folder?**
 

@@ -96,10 +96,7 @@ public sealed partial class MainWindow : Window
         main.Children.Add(columns);
         Place(shell, main, 1, 0);
 
-        play = LocalizedAction("OpenSelected", async () =>
-        {
-            foreach (var id in selected.ToArray()) await runtime.CallAsync<bool>("launch", id);
-        }, "primary");
+        play = LocalizedAction("OpenSelected", LaunchSelected, "primary");
         play.IsEnabled = false;
         var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(36, 18) };
         var feedback = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 24, 0) };
@@ -133,13 +130,18 @@ public sealed partial class MainWindow : Window
             heartbeat.Stop();
             shell.IsEnabled = false;
             try { await runtime.CallAsync<bool>("shutdown"); }
-            catch (Exception error) when (error is IOException or InvalidOperationException or TimeoutException or OperationCanceledException) { }
-            finally
+            catch (InvalidOperationException error)
             {
-                await runtime.DisposeAsync();
-                exitReady = true;
-                Dispatcher.UIThread.Post(Close);
+                closing = false;
+                shell.IsEnabled = !busy;
+                heartbeat.Start();
+                ShowError(error.Message);
+                return;
             }
+            catch (Exception error) when (error is IOException or TimeoutException or OperationCanceledException) { }
+            await runtime.DisposeAsync();
+            exitReady = true;
+            Dispatcher.UIThread.Post(Close);
         };
     }
     private static TextBlock Label(string text, string? style = null)

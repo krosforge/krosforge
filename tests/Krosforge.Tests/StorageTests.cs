@@ -92,6 +92,21 @@ public sealed class StorageTests : IDisposable
         Assert.True(File.Exists(Path.Combine(other, "keep")));
     }
     [Fact]
+    public void DeletingProfilesNeverRemovesTheSharedClient()
+    {
+        using (var store = new ProfileStore(root))
+        {
+            var first = store.Create("First");
+            var second = store.Create("Second");
+            Directory.CreateDirectory(ClientPreparation.Target(root));
+            File.WriteAllText(Path.Combine(ClientPreparation.Target(root), "keep.bin"), "shared assets");
+            store.Delete(first.Id, first.Name);
+            store.Delete(second.Id, second.Name);
+        }
+        using var service = new RuntimeService(root);
+        Assert.Equal("shared assets", File.ReadAllText(Path.Combine(ClientPreparation.Target(root), "keep.bin")));
+    }
+    [Fact]
     public void CleanupResumesAfterRuntimeRestart()
     {
         Guid id;

@@ -132,7 +132,7 @@ Version {0}</value>
     <value>Profiloptionen</value>
   </data>
   <data name="DeleteConfirmation" xml:space="preserve">
-    <value>Das Konto, seine Charaktere und seine private Kopie werden entfernt.
+    <value>Das Konto, seine Charaktere und seine lokalen Daten werden entfernt.
 Gib zur Bestätigung „{0}“ ein.</value>
   </data>
   <data name="LicensesRepository" xml:space="preserve">
@@ -172,7 +172,7 @@ Gib zur Bestätigung „{0}“ ein.</value>
     <value>Die Kopie enthält Links; die Bereinigung wurde abgebrochen.</value>
   </data>
   <data name="ErrorCopyExists" xml:space="preserve">
-    <value>Für dieses Profil ist bereits eine Kopie vorhanden.</value>
+    <value>Die gemeinsame Client-Kopie ist bereits vorhanden.</value>
   </data>
   <data name="ErrorProfileIdentity" xml:space="preserve">
     <value>Die Profilkennung liegt außerhalb des unterstützten Bereichs.</value>
@@ -316,7 +316,7 @@ Gib zur Bestätigung „{0}“ ein.</value>
     <value>Die Spielvorbereitung wurde abgebrochen.</value>
   </data>
   <data name="LaunchPreparing" xml:space="preserve">
-    <value>Profildateien werden vorbereitet…</value>
+    <value>Clientdateien werden vorbereitet…</value>
   </data>
   <data name="LaunchAuthenticating" xml:space="preserve">
     <value>Profil wird mit dem lokalen Server verbunden…</value>

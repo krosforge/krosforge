@@ -74,16 +74,35 @@ public sealed class WindowTests
         Assert.Equal(new[] { "snapshot" }, connection.Operations);
         window.Close();
     }
+    [AvaloniaFact]
+    public async Task CancelingPreparationStopsTheRemainingSelectedProfiles()
+    {
+        var connection = new Connection { LaunchStage = "preparing" };
+        var window = new MainWindow(connection);
+        window.Show();
+        foreach (var check in window.GetVisualDescendants().OfType<CheckBox>()) check.IsChecked = true;
+        window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Text.Get("OpenSelected"))).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var dialog = Assert.Single(window.OwnedWindows);
+        dialog.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Text.Get("Cancel"))).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(5));
+        while (window.OwnedWindows.Count > 0) await Task.Delay(10, deadline.Token);
+        Assert.Single(connection.Launched);
+        Assert.Contains("cancel-launch", connection.Operations);
+        window.Close();
+    }
     private sealed class Connection : IRuntimeConnection
     {
         public List<string> Operations { get; } = [];
         public List<Guid> Launched { get; } = [];
+        public string LaunchStage { get; init; } = "server-selection";
         public Profile[] Profiles { get; init; } = Enumerable.Range(1, 4).Select(i => new Profile(Guid.NewGuid(), "Perfil " + i, i)).ToArray();
         public Installation? Installation { get; init; } = new(@"C:\Client", "3.7.14.18");
         public Task<T> CallAsync<T>(string operation, Guid? id = null, string? value = null, string? confirmation = null)
         {
             Operations.Add(operation);
             if (operation == "launch") Launched.Add(id!.Value);
+            if (operation is "launch" or "launch-status") return Task.FromResult((T)(object)new LaunchStatus(id!.Value, LaunchStage, 0, 0));
             object result = operation == "snapshot" ? new Snapshot(Profiles, Installation) : true;
             return Task.FromResult((T)result);
         }
