@@ -10,128 +10,318 @@
     <value>Krosforge</value>
   </data>
   <data name="Heading" xml:space="preserve">
-    <value>Suas aventuras começam aqui.</value>
+    <value>Your adventures start here.</value>
   </data>
   <data name="Tagline" xml:space="preserve">
-    <value>Escolha seus perfis e prepare sua próxima sessão.</value>
+    <value>Choose your profiles and prepare your next session.</value>
   </data>
   <data name="CreateProfile" xml:space="preserve">
-    <value>Criar perfil</value>
+    <value>Create profile</value>
   </data>
   <data name="ChooseName" xml:space="preserve">
-    <value>Escolha um apelido para sua conta local.</value>
+    <value>Choose a name for your local account.</value>
   </data>
   <data name="Create" xml:space="preserve">
-    <value>Criar</value>
+    <value>Create</value>
   </data>
   <data name="OpenSelected" xml:space="preserve">
-    <value>Abrir selecionados</value>
+    <value>Open selected</value>
   </data>
   <data name="Settings" xml:space="preserve">
-    <value>Configurações</value>
+    <value>Settings</value>
   </data>
   <data name="About" xml:space="preserve">
-    <value>Sobre</value>
+    <value>About</value>
+  </data>
+  <data name="AboutBody" xml:space="preserve">
+    <value>Open source · GPL-3.0-only
+https://github.com/krosforge/krosforge
+Version {0}</value>
   </data>
   <data name="Close" xml:space="preserve">
-    <value>Fechar</value>
+    <value>Close</value>
   </data>
   <data name="Timeout" xml:space="preserve">
-    <value>A operação excedeu o tempo de espera.</value>
+    <value>The operation timed out.</value>
   </data>
   <data name="SelectInstallation" xml:space="preserve">
-    <value>Escolha a pasta do cliente instalado neste computador.</value>
+    <value>Choose the client folder installed on this computer.</value>
   </data>
   <data name="InstallationPrefix" xml:space="preserve">
-    <value>Instalação: </value>
+    <value>Installation: </value>
   </data>
   <data name="NoProfiles" xml:space="preserve">
-    <value>Um novo começo</value>
+    <value>A fresh start</value>
   </data>
   <data name="Play" xml:space="preserve">
-    <value>Jogar</value>
+    <value>Play</value>
   </data>
   <data name="Rename" xml:space="preserve">
-    <value>Renomear</value>
+    <value>Rename</value>
   </data>
   <data name="RenameProfile" xml:space="preserve">
-    <value>Renomear perfil</value>
+    <value>Rename profile</value>
   </data>
   <data name="NewName" xml:space="preserve">
-    <value>Novo apelido</value>
+    <value>New name</value>
   </data>
   <data name="Save" xml:space="preserve">
-    <value>Salvar</value>
+    <value>Save</value>
   </data>
   <data name="Delete" xml:space="preserve">
-    <value>Excluir</value>
+    <value>Delete</value>
   </data>
   <data name="DeleteProfile" xml:space="preserve">
-    <value>Excluir perfil</value>
+    <value>Delete profile</value>
   </data>
   <data name="SelectClient" xml:space="preserve">
-    <value>Selecionar instalação do cliente</value>
+    <value>Select client installation</value>
   </data>
   <data name="SelectLocalFolder" xml:space="preserve">
-    <value>Selecione uma pasta local.</value>
+    <value>Select a local folder.</value>
   </data>
   <data name="Cancel" xml:space="preserve">
-    <value>Cancelar</value>
+    <value>Cancel</value>
   </data>
   <data name="EmptyHelp" xml:space="preserve">
-    <value>Crie seu primeiro perfil. Cada conta tem seu próprio nome e seus personagens.</value>
+    <value>Create your first profile. Each account has its own name and characters.</value>
   </data>
   <data name="Licenses" xml:space="preserve">
-    <value>Licenças</value>
+    <value>Licenses</value>
   </data>
   <data name="ClientHeading" xml:space="preserve">
-    <value>INSTALAÇÃO DO JOGO</value>
+    <value>GAME INSTALLATION</value>
   </data>
   <data name="LocalHeading" xml:space="preserve">
-    <value>Seu espaço, suas contas</value>
+    <value>Your space, your accounts</value>
   </data>
   <data name="LocalHelp" xml:space="preserve">
-    <value>Seus perfis ficam salvos neste computador. Selecione mais de um para abrir suas contas juntas.</value>
+    <value>Your profiles are saved on this computer. Select more than one to open your accounts together.</value>
   </data>
   <data name="SelectFolder" xml:space="preserve">
-    <value>Selecionar pasta</value>
+    <value>Select folder</value>
   </data>
   <data name="ClientFound" xml:space="preserve">
-    <value>INSTALAÇÃO COMPATÍVEL</value>
+    <value>COMPATIBLE INSTALLATION</value>
   </data>
   <data name="ClientMissing" xml:space="preserve">
-    <value>SELECIONE UMA INSTALAÇÃO</value>
+    <value>SELECT AN INSTALLATION</value>
   </data>
   <data name="BuildPrefix" xml:space="preserve">
-    <value>Versão </value>
+    <value>Version </value>
   </data>
   <data name="ProfilesCount" xml:space="preserve">
-    <value>SEUS PERFIS · {0}</value>
+    <value>YOUR PROFILES · {0}</value>
   </data>
   <data name="SelectProfiles" xml:space="preserve">
-    <value>Selecione um perfil para jogar.</value>
+    <value>Select a profile to play.</value>
   </data>
   <data name="SelectedCount" xml:space="preserve">
-    <value>{0} perfis selecionados</value>
+    <value>{0} profiles selected</value>
+  </data>
+  <data name="SelectedSingle" xml:space="preserve">
+    <value>1 profile selected</value>
   </data>
   <data name="LocalProfile" xml:space="preserve">
-    <value>Conta local</value>
+    <value>Local account</value>
   </data>
   <data name="ProfileOptions" xml:space="preserve">
-    <value>Opções de {0}</value>
+    <value>Options for {0}</value>
   </data>
   <data name="ProfileActions" xml:space="preserve">
-    <value>Opções do perfil</value>
+    <value>Profile options</value>
   </data>
   <data name="DeleteConfirmation" xml:space="preserve">
-    <value>A conta, seus personagens e sua cópia privada serão removidos.
-Digite “{0}” para confirmar.</value>
+    <value>The account, its characters, and its private copy will be removed.
+Type “{0}” to confirm.</value>
   </data>
   <data name="LicensesRepository" xml:space="preserve">
-    <value>Consulte as licenças no repositório do projeto.</value>
+    <value>See the licenses in the project repository.</value>
   </data>
   <data name="SaveLicenses" xml:space="preserve">
-    <value>Salvar licenças</value>
+    <value>Save licenses</value>
   </data>
-  <data name="SelectedSingle" xml:space="preserve"><value>1 perfil selecionado</value></data>
+  <data name="Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="AutomaticLanguage" xml:space="preserve">
+    <value>Automatic ({0})</value>
+  </data>
+  <data name="LanguageHelp" xml:space="preserve">
+    <value>Use your computer’s language or choose a language for this launcher. Changes apply immediately.</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="ErrorUnexpected" xml:space="preserve">
+    <value>The operation could not be completed. Check your files and permissions, then try again.</value>
+  </data>
+  <data name="ErrorLanguageSave" xml:space="preserve">
+    <value>The language preference could not be saved. Check the launcher folder’s permissions.</value>
+  </data>
+  <data name="ErrorProfileName" xml:space="preserve">
+    <value>Enter a name of 1 to 40 characters without control characters.</value>
+  </data>
+  <data name="ErrorCompleteInstallation" xml:space="preserve">
+    <value>Select a complete, compatible installation.</value>
+  </data>
+  <data name="ErrorUnsafePath" xml:space="preserve">
+    <value>The path must not pass through symbolic links or junctions.</value>
+  </data>
+  <data name="ErrorUnsafeCopy" xml:space="preserve">
+    <value>The copy contains links; cleanup was stopped.</value>
+  </data>
+  <data name="ErrorCopyExists" xml:space="preserve">
+    <value>A copy already exists for this profile.</value>
+  </data>
+  <data name="ErrorProfileIdentity" xml:space="preserve">
+    <value>The profile identity is outside the supported range.</value>
+  </data>
+  <data name="ErrorDiskSpace" xml:space="preserve">
+    <value>There is not enough disk space to prepare the copy.</value>
+  </data>
+  <data name="ErrorClientIdentity" xml:space="preserve">
+    <value>The client identity is invalid.</value>
+  </data>
+  <data name="ErrorIndependentFolders" xml:space="preserve">
+    <value>Source and destination must be independent folders.</value>
+  </data>
+  <data name="ErrorInstallationLinks" xml:space="preserve">
+    <value>The installation contains symbolic links.</value>
+  </data>
+  <data name="ErrorSerializedIdentity" xml:space="preserve">
+    <value>The serialized identity is incompatible.</value>
+  </data>
+  <data name="ErrorAmbiguousIdentity" xml:space="preserve">
+    <value>The serialized identity is ambiguous.</value>
+  </data>
+  <data name="ErrorMissingIdentity" xml:space="preserve">
+    <value>The serialized identity is missing.</value>
+  </data>
+  <data name="ErrorClientFiles" xml:space="preserve">
+    <value>The installation files do not match the supported client build.</value>
+  </data>
+  <data name="ErrorProtocolVersion" xml:space="preserve">
+    <value>The application and runtime versions are incompatible.</value>
+  </data>
+  <data name="ErrorProfileNotFound" xml:space="preserve">
+    <value>Profile not found.</value>
+  </data>
+  <data name="ErrorSelectInstallation" xml:space="preserve">
+    <value>Select a compatible client installation.</value>
+  </data>
+  <data name="ErrorSessionFailed" xml:space="preserve">
+    <value>A compatible session could not be established with this installation.</value>
+  </data>
+  <data name="ErrorUnknownOperation" xml:space="preserve">
+    <value>Unknown operation.</value>
+  </data>
+  <data name="ErrorStorage" xml:space="preserve">
+    <value>Local data could not be accessed. Check disk space and the application folder’s permissions.</value>
+  </data>
+  <data name="ErrorInvalidProfile" xml:space="preserve">
+    <value>Invalid profile.</value>
+  </data>
+  <data name="ErrorFrameSize" xml:space="preserve">
+    <value>The message exceeds the size limit.</value>
+  </data>
+  <data name="ErrorInvalidMessage" xml:space="preserve">
+    <value>Invalid message.</value>
+  </data>
+  <data name="ErrorEmptyMessage" xml:space="preserve">
+    <value>Empty message.</value>
+  </data>
+  <data name="ErrorDatabaseVersion" xml:space="preserve">
+    <value>This database requires a newer application version.</value>
+  </data>
+  <data name="ErrorDuplicateProfile" xml:space="preserve">
+    <value>A profile with this name already exists.</value>
+  </data>
+  <data name="ErrorDeleteConfirmation" xml:space="preserve">
+    <value>Type the exact profile name to confirm deletion.</value>
+  </data>
+  <data name="ErrorExecutableMissing" xml:space="preserve">
+    <value>The application executable could not be found.</value>
+  </data>
+  <data name="ErrorRuntimeStart" xml:space="preserve">
+    <value>The local runtime could not be started.</value>
+  </data>
+  <data name="ErrorEmptyResponse" xml:space="preserve">
+    <value>The local runtime returned an empty response.</value>
+  </data>
+  <data name="ErrorInvalidResponse" xml:space="preserve">
+    <value>The local runtime returned an invalid response.</value>
+  </data>
+  <data name="ErrorClientBuild" xml:space="preserve">
+    <value>This installation does not match the supported client version.</value>
+  </data>
+  <data name="Updates" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="UpdateTitle" xml:space="preserve">
+    <value>Launcher update</value>
+  </data>
+  <data name="UpdateChecking" xml:space="preserve">
+    <value>Checking for updates…</value>
+  </data>
+  <data name="UpdateUpToDate" xml:space="preserve">
+    <value>You are using the latest stable version.</value>
+  </data>
+  <data name="UpdateOffer" xml:space="preserve">
+    <value>Version {0} is available. Download it and restart the launcher? Your profiles and settings will be preserved.</value>
+  </data>
+  <data name="UpdateInstall" xml:space="preserve">
+    <value>Download and restart</value>
+  </data>
+  <data name="UpdateDownloading" xml:space="preserve">
+    <value>Downloading update…</value>
+  </data>
+  <data name="UpdateVerifying" xml:space="preserve">
+    <value>Verifying the download…</value>
+  </data>
+  <data name="UpdateInstalling" xml:space="preserve">
+    <value>Restarting to install the update…</value>
+  </data>
+  <data name="UpdateFailed" xml:space="preserve">
+    <value>The update could not be completed. Your current installation has been preserved. Check your connection and folder permissions, then try again.</value>
+  </data>
+  <data name="UpdateWindowsOnly" xml:space="preserve">
+    <value>In-app updates are available for the Windows portable application.</value>
+  </data>
+  <data name="UpdateCloseGames" xml:space="preserve">
+    <value>Close all game sessions and wait for preparation to finish before updating the launcher.</value>
+  </data>
+  <data name="UpdateCancelled" xml:space="preserve">
+    <value>Update canceled.</value>
+  </data>
+  <data name="UpdateRestartFailed" xml:space="preserve">
+    <value>The update could not be installed. The previous executable was restored.</value>
+  </data>
+  <data name="ErrorWindowsRequired" xml:space="preserve">
+    <value>Starting the game requires Windows.</value>
+  </data>
+  <data name="ErrorClientAlreadyRunning" xml:space="preserve">
+    <value>This profile already has a game window open.</value>
+  </data>
+  <data name="ErrorCloseGameFirst" xml:space="preserve">
+    <value>Close all game windows before continuing.</value>
+  </data>
+  <data name="ErrorLaunchFailed" xml:space="preserve">
+    <value>The game could not be started. Check the installation and try again.</value>
+  </data>
+  <data name="ErrorCopyInvalid" xml:space="preserve">
+    <value>The prepared copy is invalid. Remove its application-owned folder and prepare it again.</value>
+  </data>
+  <data name="ErrorPreparationCancelled" xml:space="preserve">
+    <value>Game preparation was canceled.</value>
+  </data>
+  <data name="LaunchPreparing" xml:space="preserve">
+    <value>Preparing the profile files…</value>
+  </data>
+  <data name="LaunchAuthenticating" xml:space="preserve">
+    <value>Connecting the profile to the local server…</value>
+  </data>
+  <data name="LaunchStarting" xml:space="preserve">
+    <value>Starting the game…</value>
+  </data>
 </root>

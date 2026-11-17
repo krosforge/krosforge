@@ -17,10 +17,10 @@ public static class ClientCompatibility
             var path = Path.Combine(root, name.Replace('/', Path.DirectorySeparatorChar));
             SafePaths.CheckTree(Path.GetDirectoryName(path)!);
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("A instalação contém links.");
+                throw new IOException("ErrorInstallationLinks");
             using var input = File.OpenRead(path);
             if (Convert.ToHexStringLower(SHA256.HashData(input)) != hash)
-                throw new IOException("Os arquivos da instalação não correspondem ao build compatível.");
+                throw new IOException("ErrorClientFiles");
         }
     }
 }

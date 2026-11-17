@@ -15,7 +15,7 @@ public sealed class RuntimeService : IDisposable
     public Response Handle(Request request)
     {
         if (request.Version != Wire.Version)
-            return Response.Fail("As versões do aplicativo e do runtime são incompatíveis.");
+            return Response.Fail("ErrorProtocolVersion");
         try
         {
             switch (request.Operation)
@@ -39,21 +39,21 @@ public sealed class RuntimeService : IDisposable
                     return Response.Ok(true);
                 case "launch":
                     if (!store.List().Any(p => p.Id == RequireId(request)))
-                        return Response.Fail("Perfil não encontrado.");
+                        return Response.Fail("ErrorProfileNotFound");
                     if (ClientInstallation.Discover(store.Setting("installation")) is null)
-                        return Response.Fail("Selecione uma instalação compatível em Configurações.");
-                    return Response.Fail("Não foi possível estabelecer uma sessão compatível com esta instalação.");
+                        return Response.Fail("ErrorSelectInstallation");
+                    return Response.Fail("ErrorSessionFailed");
                 default:
-                    return Response.Fail("Operação desconhecida.");
+                    return Response.Fail("ErrorUnknownOperation");
             }
         }
-        catch (Microsoft.Data.Sqlite.SqliteException) { return Response.Fail("Não foi possível acessar os dados locais. Confira espaço e permissões da pasta do aplicativo."); }
+        catch (Microsoft.Data.Sqlite.SqliteException) { return Response.Fail("ErrorStorage"); }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             return Response.Fail(error.Message);
         }
     }
-    private static Guid RequireId(Request r) => r.ProfileId is { } id && id != Guid.Empty ? id : throw new ArgumentException("Perfil inválido.");
+    private static Guid RequireId(Request r) => r.ProfileId is { } id && id != Guid.Empty ? id : throw new ArgumentException("ErrorInvalidProfile");
     private void Cleanup()
     {
         foreach (var id in store.PendingCleanup())

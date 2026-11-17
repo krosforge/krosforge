@@ -9,7 +9,7 @@ using Avalonia.Threading;
 using Krosforge.Contracts;
 namespace Krosforge.Launcher;
 
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private readonly IRuntimeConnection runtime;
     private readonly StackPanel profiles = new() { Spacing = 10 };
@@ -31,9 +31,13 @@ public sealed class MainWindow : Window
     private static string Version => typeof(App).Assembly.GetName().Version?.ToString(3) ?? "";
 
     public MainWindow() : this(new RuntimeClient()) { }
-    public MainWindow(IRuntimeConnection connection)
+    public MainWindow(IRuntimeConnection connection) : this(connection, new LanguagePreferences(AppPaths.Data)) { }
+    internal MainWindow(IRuntimeConnection connection, LanguagePreferences preferences)
     {
         runtime = connection;
+        languagePreferences = preferences;
+        languagePreference = preferences.Load();
+        Text.Use(preferences.Resolve(languagePreference));
         Title = Text.Get("Title");
         Width = 1040;
         Height = 760;
@@ -48,8 +52,9 @@ public sealed class MainWindow : Window
         brand.Children.Add(new TextBlock { Text = "Krosforge", FontSize = 18, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         brand.Children.Add(new TextBlock { Text = "v" + Version, Classes = { "muted" }, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
         var links = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right };
-        links.Children.Add(Action(Text.Get("About"), async () => await Prompt(Text.Get("Title"), "Código aberto · GPL-3.0-only\nhttps://github.com/krosforge/krosforge\nVersão " + Version, null, Text.Get("Close")), "subtle"));
-        links.Children.Add(Action(Text.Get("Licenses"), ExportLicenses, "subtle"));
+        links.Children.Add(LocalizedAction("About", async () => await Prompt(Text.Get("Title"), string.Format(Text.Get("AboutBody"), Version), null, Text.Get("Close")), "subtle"));
+        links.Children.Add(LocalizedAction("Licenses", ExportLicenses, "subtle"));
+        links.Children.Add(LocalizedAction("Language", ChooseLanguage, "subtle"));
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(32, 16) };
         header.Children.Add(brand);
         Place(header, links, 0, 1);
@@ -57,20 +62,20 @@ public sealed class MainWindow : Window
 
         var main = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Margin = new Thickness(36, 28, 36, 24) };
         var introduction = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 28) };
-        introduction.Children.Add(Label(Text.Get("Heading"), "heading"));
-        introduction.Children.Add(Label(Text.Get("Tagline"), "muted"));
+        introduction.Children.Add(LocalizedLabel("Heading", "heading"));
+        introduction.Children.Add(LocalizedLabel("Tagline", "muted"));
         main.Children.Add(introduction);
         var columns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,28,290") };
         var profileArea = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         var profileHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 0, 0, 14) };
         profileCount.VerticalAlignment = VerticalAlignment.Center;
         profileHeader.Children.Add(profileCount);
-        Place(profileHeader, Action(Text.Get("CreateProfile"), CreateProfile), 0, 1);
+        Place(profileHeader, LocalizedAction("CreateProfile", CreateProfile), 0, 1);
         profileArea.Children.Add(profileHeader);
         Place(profileArea, new ScrollViewer { Content = profiles, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, 1, 0);
         columns.Children.Add(profileArea);
         var clientPanel = new StackPanel { Spacing = 16 };
-        clientPanel.Children.Add(Label(Text.Get("ClientHeading"), "eyebrow"));
+        clientPanel.Children.Add(LocalizedLabel("ClientHeading", "eyebrow"));
         clientPanel.Children.Add(installationState);
         installation.TextWrapping = TextWrapping.NoWrap;
         installation.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -80,10 +85,10 @@ public sealed class MainWindow : Window
         installationBuild.FontSize = 12;
         location.Children.Add(installationBuild);
         clientPanel.Children.Add(location);
-        clientPanel.Children.Add(Action(Text.Get("SelectFolder"), ChooseInstallation));
+        clientPanel.Children.Add(LocalizedAction("SelectFolder", ChooseInstallation));
         clientPanel.Children.Add(new Border { Height = 1, Background = Brush.Parse("#303740"), Margin = new Thickness(0, 4) });
-        clientPanel.Children.Add(Label(Text.Get("LocalHeading")));
-        var localHelp = Label(Text.Get("LocalHelp"), "muted");
+        clientPanel.Children.Add(LocalizedLabel("LocalHeading"));
+        var localHelp = LocalizedLabel("LocalHelp", "muted");
         localHelp.FontSize = 13;
         clientPanel.Children.Add(localHelp);
         Place(columns, new ScrollViewer { Content = Card(clientPanel), HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, 0, 2);
@@ -91,7 +96,7 @@ public sealed class MainWindow : Window
         main.Children.Add(columns);
         Place(shell, main, 1, 0);
 
-        play = Action(Text.Get("OpenSelected"), async () =>
+        play = LocalizedAction("OpenSelected", async () =>
         {
             foreach (var id in selected.ToArray()) await runtime.CallAsync<bool>("launch", id);
         }, "primary");
@@ -110,7 +115,7 @@ public sealed class MainWindow : Window
             if (closing) return;
             try { await runtime.CallAsync<bool>("ping"); }
             catch (Exception error) when (error is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
-            { ShowError(error.Message); }
+            { ShowError(error is OperationCanceledException or TimeoutException ? "Timeout" : error.Message); }
         };
         heartbeat.Start();
         Closing += async (_, args) =>
@@ -158,7 +163,8 @@ public sealed class MainWindow : Window
     }
     private void ShowError(string message)
     {
-        status.Text = message;
+        lastError = message;
+        status.Text = Text.Error(message);
         status.IsVisible = true;
     }
     private void UpdateSelection()
@@ -174,7 +180,7 @@ public sealed class MainWindow : Window
         status.IsVisible = false;
         try { await action(); }
         catch (Exception e) when (e is IOException or InvalidOperationException or UnauthorizedAccessException or TimeoutException or OperationCanceledException)
-        { ShowError(e is OperationCanceledException ? Text.Get("Timeout") : e.Message); }
+        { ShowError(e is OperationCanceledException or TimeoutException ? "Timeout" : e.Message); }
         finally { busy = false; shell.IsEnabled = !closing; UpdateSelection(); }
     }
     private async Task CreateProfile()
@@ -187,7 +193,11 @@ public sealed class MainWindow : Window
     }
     private async Task Refresh()
     {
-        var snapshot = await runtime.CallAsync<Snapshot>("snapshot");
+        lastSnapshot = await runtime.CallAsync<Snapshot>("snapshot");
+        RenderSnapshot(lastSnapshot);
+    }
+    private void RenderSnapshot(Snapshot snapshot)
+    {
         hasInstallation = snapshot.Installation != null;
         installation.Text = snapshot.Installation is { } current ? current.Path : Text.Get("SelectInstallation");
         ToolTip.SetTip(installation, snapshot.Installation?.Path);
@@ -255,7 +265,7 @@ public sealed class MainWindow : Window
     private async Task ExportLicenses()
     {
         using var source = typeof(App).Assembly.GetManifestResourceStream("Krosforge.Licenses.zip")
-            ?? throw new IOException(Text.Get("LicensesRepository"));
+            ?? throw new IOException("LicensesRepository");
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = Text.Get("SaveLicenses"), SuggestedFileName = "Krosforge-licenses.zip", DefaultExtension = "zip"
@@ -268,7 +278,7 @@ public sealed class MainWindow : Window
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = Text.Get("SelectClient"), AllowMultiple = false });
         if (folders.Count == 0) return;
-        var path = folders[0].TryGetLocalPath() ?? throw new IOException(Text.Get("SelectLocalFolder"));
+        var path = folders[0].TryGetLocalPath() ?? throw new IOException("SelectLocalFolder");
         await runtime.CallAsync<Installation>("installation", value: path);
         await Refresh();
     }
