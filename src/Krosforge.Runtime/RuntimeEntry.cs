@@ -34,13 +34,18 @@ public static class RuntimeEntry
                         var request = await Wire.ReadAsync<Request>(pipe, lifetime.Token);
                         if (request.Version == Wire.Version && request.Operation == "shutdown")
                         {
+                            if (service.HasActiveClients)
+                            {
+                                await Wire.WriteAsync(pipe, Response.Fail("ErrorCloseGameFirst"), lifetime.Token);
+                                continue;
+                            }
                             await Wire.WriteAsync(pipe, Response.Ok(true), lifetime.Token);
                             return 0;
                         }
                         await Wire.WriteAsync(pipe, service.Handle(request), lifetime.Token);
                     }
                 }
-                catch (OperationCanceledException) { return 0; }
+                catch (OperationCanceledException) { if (!service.HasActiveClients) return 0; }
                 catch (Exception e) when (e is IOException or System.Text.Json.JsonException) { }
             }
         }

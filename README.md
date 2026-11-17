@@ -26,7 +26,7 @@ Check the release notes for the gameplay features and compatibility covered by e
 
 - A Windows x64 computer.
 - Your own compatible client installation. The reference build is **3.7.14.18**.
-- A writable folder for the launcher and its data.
+- A writable folder for the launcher and its data, with enough free space for a complete client copy per profile.
 
 The download contains the launcher only. Game files are not included.
 
@@ -44,6 +44,7 @@ The launcher includes its dependencies and starts its local runtime automaticall
 1. Check the installation card. If no compatible client is found, use the folder selection button to choose the client installation folder.
 2. Use the create-profile button and enter a name for your local account.
 3. Repeat for any additional accounts, then select the profiles you want to use for a session.
+4. Choose **Abrir selecionados** (Open selected). The launcher prepares a private copy for each profile and opens the game. Preparation shows progress and can be canceled. Keep the launcher open while its game windows are active.
 
 Use a profile's **•••** menu to rename or delete it. Deletion requires typing the profile name and removes its associated records and application-owned copies. Back up your data before deleting a profile you may want to keep.
 
@@ -63,7 +64,7 @@ Krosforge/
 └── Krosforge-data/
 ```
 
-`Krosforge-data` holds your profiles, settings, and local database. No `portable` marker file is needed.
+`Krosforge-data` holds your profiles, settings, local database, and prepared client copies. The native client may also create Unity caches outside this folder; these are not part of a launcher-folder backup. No `portable` marker file is needed.
 
 **To back up or move the launcher:** close it, then copy the entire folder, including `Krosforge-data`.
 

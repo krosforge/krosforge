@@ -30,6 +30,8 @@ The portable data directory is created beside the built application. Do not comm
 
 Package versions are centralized in `Directory.Packages.props`. Shared build settings are in `Directory.Build.props`.
 
+See [local native-client sessions](docs/native-client.md) for ownership boundaries, launch progress, and the loopback connection contract.
+
 ## Tests
 
 Run the solution tests before submitting a code change:
