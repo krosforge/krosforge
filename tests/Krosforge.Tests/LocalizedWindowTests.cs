@@ -85,13 +85,32 @@ public sealed class LocalizedWindowTests
         }
         finally { window.Close(); Dispatcher.UIThread.RunJobs(); File.Delete(path); }
     }
+    [AvaloniaFact]
+    public void ActiveSessionPreventsCloseWithLocalizedExplanation()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "active-session-window-" + Guid.NewGuid().ToString("N"));
+        var connection = new Connection { RejectShutdown = true };
+        var window = new MainWindow(connection, new LanguagePreferences(directory, CultureInfo.GetCultureInfo("fr-FR")));
+        window.Show();
+        try
+        {
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(window.IsVisible);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), b => b.Text == Text.Get("ErrorCloseGameFirst"));
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), b => b.Text == Text.Get("ErrorUnexpected"));
+        }
+        finally { connection.RejectShutdown = false; window.Close(); Dispatcher.UIThread.RunJobs(); }
+    }
     private sealed class Connection : IRuntimeConnection
     {
         public bool RejectLaunch { get; init; }
+        public bool RejectShutdown { get; set; }
         public List<string> Operations { get; } = [];
         public Task<T> CallAsync<T>(string operation, Guid? id = null, string? value = null, string? confirmation = null)
         {
             Operations.Add(operation);
+            if (RejectShutdown && operation == "shutdown") return Task.FromException<T>(new InvalidOperationException("ErrorCloseGameFirst"));
             if (RejectLaunch && operation == "launch") return Task.FromException<T>(new InvalidOperationException("ErrorProfileNotFound"));
             object result = operation == "snapshot" ? new Snapshot(Enumerable.Range(1, 4).Select(i => new Profile(Guid.NewGuid(), "Profile " + i, i)).ToArray(), new Installation(@"C:\Client", "3.7.14.18")) : true;
             return Task.FromResult((T)result);

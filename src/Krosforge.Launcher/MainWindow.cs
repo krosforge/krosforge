@@ -135,7 +135,7 @@ public sealed partial class MainWindow : Window
                 closing = false;
                 shell.IsEnabled = !busy;
                 heartbeat.Start();
-                ShowError(error.Message == "ErrorCloseGameFirst" ? Text.Get("ErrorCloseGameFirst") : error.Message);
+                ShowError(error.Message);
                 return;
             }
             catch (Exception error) when (error is IOException or TimeoutException or OperationCanceledException) { }
