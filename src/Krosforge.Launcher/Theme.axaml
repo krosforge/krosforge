@@ -1,0 +1,58 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <SolidColorBrush x:Key="CanvasBrush">#14171C</SolidColorBrush>
+    <SolidColorBrush x:Key="SurfaceBrush">#1D2229</SolidColorBrush>
+    <SolidColorBrush x:Key="LineBrush">#303740</SolidColorBrush>
+    <SolidColorBrush x:Key="MutedBrush">#A2AFBE</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentBrush">#75E2BA</SolidColorBrush>
+  </Styles.Resources>
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource CanvasBrush}"/>
+    <Setter Property="Foreground" Value="#F0F4F7"/>
+    <Setter Property="FontFamily" Value="Segoe UI, Inter, sans-serif"/>
+    <Setter Property="FontSize" Value="14"/>
+  </Style>
+  <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/></Style>
+  <Style Selector="TextBlock.eyebrow">
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="LetterSpacing" Value="1.4"/>
+  </Style>
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="30"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="20"/>
+  </Style>
+  <Style Selector="Border.profile"><Setter Property="Padding" Value="16"/></Style>
+  <Style Selector="Border.profile.selected"><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Style>
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="16,10"/>
+    <Setter Property="MinHeight" Value="40"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="#10241D"/>
+    <Setter Property="Padding" Value="26,13"/>
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#9FEED0"/>
+    <Setter Property="Foreground" Value="#10241D"/>
+  </Style>
+  <Style Selector="Button.subtle">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+    <Setter Property="Padding" Value="12,8"/>
+  </Style>
+  <Style Selector="Button.danger"><Setter Property="Foreground" Value="#FFB4AA"/></Style>
+  <Style Selector="TextBox"><Setter Property="CornerRadius" Value="8"/></Style>
+</Styles>

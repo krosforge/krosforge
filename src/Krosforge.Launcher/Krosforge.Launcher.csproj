@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <ApplicationIcon>Assets/Krosforge.ico</ApplicationIcon>
+    <AssemblyName>Krosforge</AssemblyName>
+    <RootNamespace>Krosforge.Launcher</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Krosforge.Contracts/Krosforge.Contracts.csproj" />
+    <ProjectReference Include="../Krosforge.Core/Krosforge.Core.csproj" />
+    <ProjectReference Include="../Krosforge.Runtime/Krosforge.Runtime.csproj" />
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(BundledLicensesFile)' != ''">
+    <EmbeddedResource Include="$(BundledLicensesFile)" LogicalName="Krosforge.Licenses.zip" />
+  </ItemGroup>
+  <Target Name="ExcludeNativeDebugSymbols" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
+</Project>

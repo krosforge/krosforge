@@ -1,0 +1,11 @@
+bin/
+obj/
+.artifacts/
+.vs/
+*.user
+.env
+var/
+*.db
+*.db-shm
+*.db-wal
+Krosforge-data/

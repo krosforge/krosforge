@@ -1,0 +1,27 @@
+name: Verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - run: dotnet build Krosforge.slnx -c Release
+      - run: dotnet test Krosforge.slnx -c Release
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./packaging/publish.ps1
+          ./tests/PowerShell/PortablePackage.Tests.ps1 -PackageRoot .artifacts/portable

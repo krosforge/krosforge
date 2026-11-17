@@ -1,0 +1,1 @@
+<Solution><Project Path="src/Krosforge.Core/Krosforge.Core.csproj"/><Project Path="src/Krosforge.Contracts/Krosforge.Contracts.csproj"/><Project Path="src/Krosforge.Runtime/Krosforge.Runtime.csproj"/><Project Path="src/Krosforge.Launcher/Krosforge.Launcher.csproj"/><Project Path="tests/Krosforge.Tests/Krosforge.Tests.csproj"/></Solution>
