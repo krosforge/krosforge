@@ -41,11 +41,16 @@ function Check-Update([bool]$FailRestart, [bool]$Cancel = $false) {
         ParentId=$Parent.Id; ParentStartedUtcTicks=$Parent.StartTime.ToUniversalTime().Ticks; Installed=$false
     }
     $Plan | ConvertTo-Json | Set-Content (Join-Path $Stage 'update.json') -Encoding UTF8
-    $Helper = Start-Process (Join-Path $Stage 'UpdateHost.exe') -ArgumentList @('--apply-update', ('"' + $Stage + '"')) -PassThru
+    $HelperErrors = Join-Path $Root ('helper-' + [Guid]::NewGuid().ToString('N') + '.stderr.txt')
+    $Helper = Start-Process (Join-Path $Stage 'UpdateHost.exe') -ArgumentList @('--apply-update', ('"' + $Stage + '"')) -RedirectStandardError $HelperErrors -PassThru
     $Owned.Add($Helper)
     $Deadline = [DateTime]::UtcNow.AddSeconds(20)
     while (-not (Test-Path (Join-Path $Stage 'ready'))) {
-        if ($Helper.HasExited -or [DateTime]::UtcNow -ge $Deadline) { throw 'Update helper did not become ready.' }
+        if ($Helper.HasExited -or [DateTime]::UtcNow -ge $Deadline) {
+            $Exit = if ($Helper.HasExited) { $Helper.ExitCode } else { 'running' }
+            $Diagnostic = if (Test-Path $HelperErrors) { Get-Content $HelperErrors -Raw } else { '' }
+            throw ('Update helper did not become ready. Exit: ' + $Exit + '; TEMP: ' + $env:TEMP + '; .NET temp: ' + [IO.Path]::GetTempPath() + '; ' + $Diagnostic)
+        }
         Start-Sleep -Milliseconds 100
     }
     if ($Cancel) {

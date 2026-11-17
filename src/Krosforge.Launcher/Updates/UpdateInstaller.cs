@@ -19,8 +19,8 @@ internal static class UpdateInstaller
     }
     internal static string ValidateDirectory(string directory)
     {
-        directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
-        if (!string.Equals(Path.GetDirectoryName(directory), Path.GetFullPath(StagingRoot), StringComparison.OrdinalIgnoreCase) || !Guid.TryParseExact(Path.GetFileName(directory), "N", out _))
+        directory = UpdatePaths.Normalize(directory);
+        if (!string.Equals(Path.GetDirectoryName(directory), UpdatePaths.Normalize(StagingRoot), StringComparison.OrdinalIgnoreCase) || !Guid.TryParseExact(Path.GetFileName(directory), "N", out _))
             throw new InvalidDataException("Invalid update staging directory.");
         SafePaths.CheckTree(directory);
         return directory;
@@ -34,7 +34,7 @@ internal static class UpdateInstaller
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         var directory = ValidateDirectory(download.Directory);
-        var target = Path.GetFullPath(Environment.ProcessPath ?? throw new IOException("Application path unavailable."));
+        var target = UpdatePaths.Normalize(Environment.ProcessPath ?? throw new IOException("Application path unavailable."));
         if (!target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || Path.GetFileName(target).Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase)) throw new IOException("Updates require the packaged application.");
         CheckFile(target);
         using var current = Process.GetCurrentProcess();
@@ -84,20 +84,26 @@ internal static class UpdateInstaller
         var verified = false;
         string? backup = null;
         string? ownedLockPath = null;
+        var phase = "staging-directory";
         try
         {
             directory = ValidateDirectory(directory);
+            phase = "update-plan";
             CheckFile(Path.Combine(directory, "update.json"));
             plan = JsonSerializer.Deserialize<UpdatePlan>(await File.ReadAllTextAsync(Path.Combine(directory, "update.json"))) ?? throw new InvalidDataException("Missing update plan.");
-            var target = Path.GetFullPath(plan.Target);
+            var target = UpdatePaths.Normalize(plan.Target);
             CheckFile(target);
-            var self = Path.GetFullPath(Environment.ProcessPath!);
-            if (!string.Equals(self, Path.Combine(directory, "UpdateHost.exe"), StringComparison.OrdinalIgnoreCase) || !string.Equals(await ReleaseClient.HashAsync(self, CancellationToken.None), plan.CurrentHash, StringComparison.OrdinalIgnoreCase))
+            phase = "helper-image";
+            var self = UpdatePaths.Normalize(Environment.ProcessPath!);
+            if (!UpdatePaths.Same(self, Path.Combine(directory, "UpdateHost.exe")) || !string.Equals(await ReleaseClient.HashAsync(self, CancellationToken.None), plan.CurrentHash, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Invalid update helper.");
+            phase = "parent-process";
             using var parent = Process.GetProcessById(plan.ParentId);
-            if (parent.StartTime.ToUniversalTime().Ticks != plan.ParentStartedUtcTicks || !string.Equals(parent.MainModule?.FileName, target, StringComparison.OrdinalIgnoreCase))
+            if (parent.StartTime.ToUniversalTime().Ticks != plan.ParentStartedUtcTicks || parent.MainModule?.FileName is not { } parentImage || !UpdatePaths.Same(parentImage, target))
                 throw new InvalidDataException("The launcher process changed.");
+            phase = "target-image";
             if (!string.Equals(await ReleaseClient.HashAsync(target, CancellationToken.None), plan.CurrentHash, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("The installed executable changed.");
+            phase = "candidate-image";
             var candidate = Path.Combine(directory, "Krosforge.exe");
             CheckFile(candidate);
             if (!string.Equals(await ReleaseClient.HashAsync(candidate, CancellationToken.None), plan.CandidateHash, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("The update changed after download.");
@@ -149,6 +155,8 @@ internal static class UpdateInstaller
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or JsonException or System.ComponentModel.Win32Exception or OperationCanceledException)
         {
+            try { Console.Error.WriteLine($"Update helper failed during {phase}: {error.GetType().Name}: {error.Message}"); }
+            catch (IOException) { }
             if (plan is not null && replaced && backup is not null && File.Exists(backup))
             {
                 try { File.Replace(backup, plan.Target, null); }
@@ -220,7 +228,7 @@ internal static class UpdateInstaller
         {
             var directory = ValidateDirectory(args[index + 1]);
             var plan = JsonSerializer.Deserialize<UpdatePlan>(await File.ReadAllTextAsync(Path.Combine(directory, "update.json")));
-            if (plan is null || !string.Equals(Path.GetFullPath(plan.Target), Environment.ProcessPath, StringComparison.OrdinalIgnoreCase)) return false;
+            if (plan is null || !UpdatePaths.Same(plan.Target, Environment.ProcessPath!)) return false;
             var actual = await ReleaseClient.HashAsync(plan.Target, CancellationToken.None);
             if (actual != plan.CandidateHash && actual != plan.CurrentHash) return false;
             await File.WriteAllTextAsync(Path.Combine(directory, "started"), "");
