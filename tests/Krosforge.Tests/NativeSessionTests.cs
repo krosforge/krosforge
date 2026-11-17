@@ -109,6 +109,53 @@ public sealed class NativeSessionTests
         await Assert.ThrowsAsync<EndOfStreamException>(() => Rpc(codec, client.GetStream(), "connect", new()
         { [1] = ThriftValue.String("dofus"), [2] = ThriftValue.String("main"), [3] = ThriftValue.Int32(1), [4] = ThriftValue.String(second.ConnectSecret) }, deadline.Token));
     }
+    [Fact]
+    public async Task AuthenticatedConnectionsStayOpenWhileWaitingForTheUser()
+    {
+        await using var host = new LocalSessionHost(TimeSpan.FromSeconds(2));
+        using var registration = host.Register(new(Guid.NewGuid(), "Waiting", 1), "en", _ => { });
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(15));
+        var token = deadline.Token;
+        using var launcher = new TcpClient();
+        await launcher.ConnectAsync("127.0.0.1", host.LauncherPort, token);
+        var codec = new ThriftBinaryCodec(new(65536, 8192, 128));
+        var connected = await Rpc(codec, launcher.GetStream(), "connect", new()
+        { [1] = ThriftValue.String("dofus"), [2] = ThriftValue.String("main"), [3] = ThriftValue.Int32(1), [4] = ThriftValue.String(registration.ConnectSecret) }, token);
+        var key = connected.Text(0);
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", host.ConnectionPort, token);
+        var credential = new ArrayBufferWriter<byte>();
+        ProtoWriter.Bytes(credential, 1, Encoding.UTF8.GetBytes(registration.IssueTicket()));
+        var authentication = new ArrayBufferWriter<byte>();
+        ProtoWriter.Bytes(authentication, 3, credential.WrittenSpan);
+        await Send(client.GetStream(), "1", 3, authentication.WrittenMemory, token);
+        await LocalSessionHost.ReadFrame(client.GetStream(), token);
+
+        // An authenticated window may wait at server selection longer than the handshake timeout.
+        await Task.Delay(TimeSpan.FromSeconds(3), token);
+        var language = await Rpc(codec, launcher.GetStream(), "settings_get", new()
+        { [1] = ThriftValue.String(key), [2] = ThriftValue.String("language") }, token);
+        Assert.Equal("en", language.Text(0));
+        await Send(client.GetStream(), "2", 2, ReadOnlyMemory<byte>.Empty, token);
+        await LocalSessionHost.ReadFrame(client.GetStream(), token);
+
+        registration.Dispose();
+        await Assert.ThrowsAsync<EndOfStreamException>(() => codec.ReadAsync(launcher.GetStream(), token));
+        await Assert.ThrowsAsync<EndOfStreamException>(() => LocalSessionHost.ReadFrame(client.GetStream(), token));
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UnauthenticatedConnectionsStillTimeOut(bool launcherProtocol)
+    {
+        await using var host = new LocalSessionHost(TimeSpan.FromMilliseconds(200));
+        using var client = new TcpClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await client.ConnectAsync("127.0.0.1", launcherProtocol ? host.LauncherPort : host.ConnectionPort, deadline.Token);
+        var buffer = new byte[1];
+        Assert.Equal(0, await client.GetStream().ReadAsync(buffer, deadline.Token));
+    }
     private static async Task<string> Ticket(LocalSessionHost host, LocalSessionHost.Session registration, CancellationToken token)
     {
         using var client = new TcpClient();

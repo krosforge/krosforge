@@ -27,12 +27,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
     internal LaunchStatus Status(Guid profileId) => jobs.TryGetValue(profileId, out var job) ? job.Status : new(profileId, "idle", 0, 0);
     internal bool Cancel(Guid profileId)
     {
-        if (jobs.TryGetValue(profileId, out var job) && job.Status.Stage == "preparing")
-        {
-            job.Cancellation.Cancel();
-            return true;
-        }
-        return false;
+        return jobs.TryGetValue(profileId, out var job) && job.CancelPreparation();
     }
     private async Task Run(LaunchJob job, Profile profile, string source, string language)
     {
@@ -45,7 +40,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
             await preparation.WaitAsync(job.Cancellation.Token);
             try
             {
-                var installation = ClientInstallation.Inspect(source);
+                var installation = ClientInstallation.Discover(source) ?? throw new IOException("ErrorSelectInstallation");
                 target = ClientPreparation.Target(dataRoot);
                 if (!configured)
                     await SharedClientMigration.MigrateAsync(dataRoot, path => ValidatePrepared(installation.Path, path, allowLegacy: true), job.Cancellation.Token);
@@ -74,11 +69,10 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
             start.Environment["ZAAP_INSTANCE_ID"] = profile.Slot.ToString();
             start.Environment["ZAAP_HASH"] = session.ConnectSecret;
             foreach (var argument in new[] { "-logFile", logPath, "--connectionPort", host!.ConnectionPort.ToString(), "--langCode", language, "--port", host!.LauncherPort.ToString(), "--gameName", "dofus", "--gameRelease", "main", "--instanceId", profile.Slot.ToString(), "--hash", session.ConnectSecret, "--canLogin", "true" }) start.ArgumentList.Add(argument);
-            job.Cancellation.Token.ThrowIfCancellationRequested();
-            job.Update("starting");
+            job.BeginStarting();
             using var process = Process.Start(start) ?? throw new IOException("ErrorLaunchFailed");
             job.Process = process;
-            job.Update("starting", processId: process.Id);
+            job.RecordProcess(process.Id);
             await process.WaitForExitAsync();
         }
         catch (OperationCanceledException) { terminal = "cancelled"; failure = "ErrorPreparationCancelled"; }
@@ -123,12 +117,17 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
         }
         var info = File.ReadAllLines(Path.Combine(target, "Dofus_Data", "app.info"));
         if (info.Length != 2 || info[0] != marker.Company || info[1] != marker.Product) throw new IOException("ErrorCopyInvalid");
+        ValidatePreparedIdentity(source, target, marker);
+        return marker;
+    }
+    internal static void ValidatePreparedIdentity(string source, string target, PreparedClient marker)
+    {
         var originalInfo = File.ReadAllLines(Path.Combine(source, "Dofus_Data", "app.info"));
+        if (originalInfo.Length != 2) throw new IOException("ErrorClientIdentity");
         var expected = File.ReadAllBytes(Path.Combine(source, "Dofus_Data", "globalgamemanagers"));
         ClientPreparation.ReplaceUnique(expected, Serialize(originalInfo[0]).Concat(Serialize(originalInfo[1])).ToArray(), Serialize(marker.Company).Concat(Serialize(marker.Product)).ToArray());
         var actual = File.ReadAllBytes(Path.Combine(target, "Dofus_Data", "globalgamemanagers"));
         if (!expected.AsSpan().SequenceEqual(actual)) throw new IOException("ErrorCopyInvalid");
-        return marker;
     }
     private static byte[] Serialize(string value)
     {
@@ -150,18 +149,43 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
     {
         public void Report(CopyProgress value) => report(value);
     }
-    private sealed class LaunchJob(Guid profileId)
+    internal sealed class LaunchJob(Guid profileId)
     {
+        private readonly object gate = new();
         private LaunchStatus status = new(profileId, "preparing", 0, 0);
         internal CancellationTokenSource Cancellation { get; } = new();
         internal Process? Process { get; set; }
         internal Task? Work { get; set; }
         internal LaunchStatus Status => Volatile.Read(ref status);
         internal bool Active => Status.Stage is "preparing" or "starting" or "authenticating" or "server-selection";
-        internal void Update(string stage, long? bytes = null, long? total = null, string? error = null, int? processId = null)
+        internal bool CancelPreparation()
         {
-            var old = Status;
-            Volatile.Write(ref status, new(profileId, stage, bytes ?? old.BytesCopied, total ?? old.TotalBytes, error, processId ?? old.ProcessId));
+            lock (gate)
+            {
+                if (status.Stage != "preparing") return false;
+                Cancellation.Cancel();
+                return true;
+            }
+        }
+        internal void BeginStarting()
+        {
+            lock (gate)
+            {
+                Cancellation.Token.ThrowIfCancellationRequested();
+                Volatile.Write(ref status, status with { Stage = "starting" });
+            }
+        }
+        internal void RecordProcess(int processId)
+        {
+            lock (gate) Volatile.Write(ref status, status with { ProcessId = processId });
+        }
+        internal void Update(string stage, long? bytes = null, long? total = null, string? error = null)
+        {
+            lock (gate)
+            {
+                var old = status;
+                Volatile.Write(ref status, new(profileId, stage, bytes ?? old.BytesCopied, total ?? old.TotalBytes, error, old.ProcessId));
+            }
         }
     }
 }

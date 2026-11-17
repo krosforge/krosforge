@@ -29,6 +29,8 @@ Wire codecs were adapted from the original Krosforge protocol implementation. Te
 
 The `server-selection` launch status means that the authenticated server-list response was written to the native connection. Automated protocol tests establish this transport behavior; observing the native screen is a separate validation step. Server selection returns a protocol failure until a world session is available, rather than fabricating a world handoff.
 
+Unauthenticated launcher and connection requests have a 30-second timeout. Once authenticated, connections remain open while the user waits at server selection; closing the profile revokes them. Cancellation and the transition to starting a native process are serialized: an accepted preparation cancellation prevents that process from starting.
+
 ## Diagnostics
 
 Native logs are written under `Krosforge-data/logs/<profile-id>`. The native client may include launcher arguments and session secrets in these files. Do not attach raw logs to issues or commits. Loopback authentication tests use synthetic accounts and no client assets.

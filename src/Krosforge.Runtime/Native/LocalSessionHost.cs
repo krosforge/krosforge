@@ -21,14 +21,16 @@ internal sealed class LocalSessionHost : IAsyncDisposable
     private readonly List<Task> listeners = [];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Task> clients = new();
     private readonly SemaphoreSlim slots = new(24);
+    private readonly TimeSpan authenticationTimeout;
 
     private int nextClient;
     internal int HttpPort => ((IPEndPoint)http.LocalEndpoint).Port;
     internal int LauncherPort => ((IPEndPoint)launcher.LocalEndpoint).Port;
     internal int ConnectionPort => ((IPEndPoint)connection.LocalEndpoint).Port;
     internal string BaseUrl => $"http://127.0.0.1:{HttpPort}";
-    internal LocalSessionHost()
+    internal LocalSessionHost(TimeSpan? authenticationTimeout = null)
     {
+        this.authenticationTimeout = authenticationTimeout ?? TimeSpan.FromSeconds(30);
         try
         {
             http.Start(); launcher.Start(); connection.Start();
@@ -106,10 +108,10 @@ internal sealed class LocalSessionHost : IAsyncDisposable
     private async Task Handle(TcpClient client, Func<NetworkStream, CancellationToken, Task> serve)
     {
         using (client)
-        using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
         {
-            deadline.CancelAfter(TimeSpan.FromMinutes(15));
-            try { await serve(client.GetStream(), deadline.Token); }
+            // Each protocol bounds unauthenticated requests. Active sessions live until their
+            // registration is revoked or the host shuts down, not a fixed connection age.
+            try { await serve(client.GetStream(), lifetime.Token); }
             catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or ProtocolException or JsonException) { }
             finally { slots.Release(); }
         }
@@ -160,7 +162,7 @@ internal sealed class LocalSessionHost : IAsyncDisposable
         while (!token.IsCancellationRequested)
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token, session?.Token ?? token);
-            deadline.CancelAfter(TimeSpan.FromMinutes(5));
+            if (session is null) deadline.CancelAfter(authenticationTimeout);
             var request = await codec.ReadAsync(stream, deadline.Token);
             ThriftValue? value;
             if (request.Kind != ThriftMessageKind.Call) throw new ProtocolException("Launcher call required.");
@@ -204,7 +206,7 @@ internal sealed class LocalSessionHost : IAsyncDisposable
         while (!token.IsCancellationRequested)
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token, session?.Token ?? token);
-            deadline.CancelAfter(session is not null ? TimeSpan.FromMinutes(15) : TimeSpan.FromSeconds(30));
+            if (session is null) deadline.CancelAfter(authenticationTimeout);
             var request = envelope.DecodeRequest(await ReadFrame(stream, deadline.Token));
             byte[] payload;
             if (request.Operation == ConnectionAuthentication.Authenticate)
