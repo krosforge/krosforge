@@ -1,0 +1,78 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versão SemVer, sem v'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Validate version and notes
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') { throw 'Versao invalida.' }
+          if (-not (Test-Path "release-notes/$env:RELEASE_VERSION.md")) { throw 'Release notes ausentes.' }
+      - run: dotnet test Krosforge.slnx -c Release
+      - name: Publish and package
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          ./packaging/publish.ps1 -Version $env:RELEASE_VERSION
+          ./tests/PowerShell/PortablePackage.Tests.ps1 -PackageRoot .artifacts/portable
+          Remove-Item .artifacts/licenses.zip
+          git archive --format=zip -o ".artifacts/Krosforge-$env:RELEASE_VERSION-source.zip" HEAD
+          Get-ChildItem .artifacts -File | Sort-Object Name | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content .artifacts/SHA256SUMS -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .artifacts/Krosforge-${{ inputs.version }}-win-x64-portable.zip
+            .artifacts/Krosforge-${{ inputs.version }}-source.zip
+            .artifacts/SHA256SUMS
+            release-notes/${{ inputs.version }}.md
+  publish:
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+      - name: Publish completed assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -s "release/.artifacts/Krosforge-$RELEASE_VERSION-win-x64-portable.zip"
+          test -s "release/.artifacts/Krosforge-$RELEASE_VERSION-source.zip"
+          (cd release/.artifacts && sha256sum --check SHA256SUMS)
+          gh release create "v$RELEASE_VERSION" --target "$RELEASE_COMMIT" --draft --title "Krosforge $RELEASE_VERSION" --notes-file "release/release-notes/$RELEASE_VERSION.md" release/.artifacts/*
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            gh release edit "v$RELEASE_VERSION" --draft=false --prerelease
+          else
+            gh release edit "v$RELEASE_VERSION" --draft=false
+          fi
