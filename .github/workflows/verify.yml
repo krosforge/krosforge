@@ -25,3 +25,10 @@ jobs:
         run: |
           ./packaging/publish.ps1
           ./tests/PowerShell/PortablePackage.Tests.ps1 -PackageRoot .artifacts/portable
+      - name: Verify Windows updater recovery
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item .artifacts/app .artifacts/update-current -Recurse
+          ./packaging/publish.ps1 -Version 0.0.2
+          ./tests/PowerShell/UpdateInstaller.Tests.ps1 -CurrentPackage .artifacts/update-current -CandidatePackage .artifacts/app

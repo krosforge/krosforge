@@ -109,7 +109,13 @@ public sealed partial class MainWindow : Window
         Place(footer, play, 0, 1);
         Place(shell, new Border { Child = footer, BorderBrush = Brush.Parse("#303740"), BorderThickness = new Thickness(0, 1, 0, 0) }, 2, 0);
         Content = shell;
-        Opened += async (_, _) => await Run(Refresh);
+        InitializeUpdates(links);
+        Opened += async (_, _) =>
+        {
+            if (!await Updates.UpdateInstaller.CompleteRestartAsync(Environment.GetCommandLineArgs())) { Close(); return; }
+            await Run(Refresh);
+            if (Environment.GetCommandLineArgs().Contains("--update-failed")) ShowError("UpdateRestartFailed");
+        };
         heartbeat.Tick += async (_, _) =>
         {
             if (closing) return;

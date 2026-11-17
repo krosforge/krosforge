@@ -29,6 +29,7 @@ public sealed class LocalizedWindowTests
             {
                 window.ChangeLanguage(language);
                 Assert.Equal(language, Text.Culture.Name);
+                Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, Text.Get("Updates")));
                 checks = window.GetVisualDescendants().OfType<CheckBox>().ToArray();
                 Assert.Equal(new[] { false, true, false, true }, checks.Select(c => c.IsChecked == true));
                 Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), b => b.Text == Text.Get("Heading"));
