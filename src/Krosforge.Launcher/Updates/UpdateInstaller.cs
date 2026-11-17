@@ -109,7 +109,8 @@ internal static class UpdateInstaller
             if (!string.Equals(await ReleaseClient.HashAsync(candidate, CancellationToken.None), plan.CandidateHash, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("The update changed after download.");
             verified = true;
             await File.WriteAllTextAsync(Path.Combine(directory, "ready"), "");
-            await File.WriteAllTextAsync(Path.Combine(directory, "state"), "waiting-parent");
+            phase = "waiting-parent";
+            await File.WriteAllTextAsync(Path.Combine(directory, "state"), phase);
             var deadline = DateTime.UtcNow.AddSeconds(60);
             while (!parent.HasExited)
             {
@@ -121,14 +122,17 @@ internal static class UpdateInstaller
             using (var ownership = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
             {
                 ownedLockPath = lockPath;
-                await File.WriteAllTextAsync(Path.Combine(directory, "state"), "replacing");
+                phase = "replacing";
+                await File.WriteAllTextAsync(Path.Combine(directory, "state"), phase);
                 backup = BackupPath(target, directory);
                 await ReplaceAsync(plan, directory, CancellationToken.None);
                 replaced = true;
                 File.Delete(Path.Combine(directory, "started"));
-                await File.WriteAllTextAsync(Path.Combine(directory, "state"), "starting");
+                phase = "starting";
+                await File.WriteAllTextAsync(Path.Combine(directory, "state"), phase);
                 using var restarted = Process.Start(RestartInfo(plan, directory, false)) ?? throw new IOException("Could not restart the launcher.");
-                await File.WriteAllTextAsync(Path.Combine(directory, "state"), "waiting-startup");
+                phase = "waiting-startup";
+                await File.WriteAllTextAsync(Path.Combine(directory, "state"), phase);
                 var startupDeadline = DateTime.UtcNow.AddSeconds(45);
                 while (!File.Exists(Path.Combine(directory, "started")))
                 {
@@ -155,7 +159,7 @@ internal static class UpdateInstaller
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or JsonException or System.ComponentModel.Win32Exception or OperationCanceledException)
         {
-            try { Console.Error.WriteLine($"Update helper failed during {phase}: {error.GetType().Name}: {error.Message}"); }
+            try { Console.Error.WriteLine($"Update helper failed during {phase}: {error.GetType().Name} (0x{error.HResult:X8})"); }
             catch (IOException) { }
             if (plan is not null && replaced && backup is not null && File.Exists(backup))
             {
