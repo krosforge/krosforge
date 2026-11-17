@@ -41,6 +41,8 @@ public sealed class LocalizationTests : IDisposable
     [InlineData("not json")]
     [InlineData("{\"language\":\"it\"}")]
     [InlineData("{\"language\":42}")]
+    [InlineData("{\"language\":\"en\",\"language\":\"fr\"}")]
+    [InlineData("{\"language\":\"en\",\"other\":1,\"other\":2}")]
     public void DamagedOrUnsupportedPreferenceFallsBackToComputerLanguage(string json)
     {
         Directory.CreateDirectory(directory);
@@ -48,6 +50,23 @@ public sealed class LocalizationTests : IDisposable
         var settings = new LanguagePreferences(directory, CultureInfo.GetCultureInfo("fr-FR"));
         Assert.Equal("auto", settings.Load());
         Assert.Equal("fr", settings.Resolve(settings.Load()).Name);
+    }
+    [Theory]
+    [InlineData("{\"language\":\"en\",\"language\":\"fr\"}")]
+    [InlineData("{\"language\":\"en\",\"other\":1,\"other\":2}")]
+    public void SavingLanguageRecoversFromDuplicatePreferenceKeys(string json)
+    {
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "launcher-preferences.json");
+        File.WriteAllText(path, json);
+
+        new LanguagePreferences(directory).Save("pt");
+
+        var saved = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.Single(saved);
+        Assert.Equal("pt", saved["language"]!.GetValue<string>());
+        Assert.Equal("pt", new LanguagePreferences(directory).Load());
+        Assert.Single(Directory.GetFiles(directory));
     }
     [Fact]
     public void SavingLanguagePreservesOtherPreferences()

@@ -53,7 +53,14 @@ internal sealed class LanguagePreferences
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
-    private JsonObject ReadDocument() => File.Exists(path)
-        ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? throw new JsonException("Expected a preferences object.")
-        : new JsonObject();
+    private JsonObject ReadDocument()
+    {
+        var document = File.Exists(path)
+            ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? throw new JsonException("Expected a preferences object.")
+            : new JsonObject();
+        // JsonObject defers materialization; detect duplicate keys within the shared read boundary.
+        try { _ = document.Count; }
+        catch (ArgumentException error) { throw new JsonException("Duplicate preference keys.", error); }
+        return document;
+    }
 }
