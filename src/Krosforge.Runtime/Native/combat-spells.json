@@ -1,0 +1,36 @@
+{
+  "Build": "3.7.14.18",
+  "Spells": {
+    "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_spellsdataroot.asset.bundle",
+    "Sha256": "a20fd41be96194df1f600eec608392a7737eeb73e938ec46f08ef141c3427832"
+  },
+  "Levels": {
+    "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_spelllevelsdataroot.asset.bundle",
+    "Sha256": "bdb4860ddc8d0446dfcd202edebe6dc3f140859f4f530867f63c0450529e4cb8"
+  },
+  "Breeds": {
+    "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_breedsdataroot.asset.bundle",
+    "Sha256": "f4b32b06cd33e1bdbce26794aabee34eea3f16066a98d8eb378685f73719993d"
+  },
+  "Common": [
+    0
+  ],
+  "Players": [
+    {
+      "Breed": 3,
+      "Spells": [
+        13338,
+        13331
+      ]
+    }
+  ],
+  "Monsters": [
+    5866
+  ],
+  "Timing": {
+    "TurnMilliseconds": 30000,
+    "AnimationMilliseconds": 15000,
+    "ReadyMilliseconds": 5000,
+    "AutomaticMilliseconds": 250
+  }
+}

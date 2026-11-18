@@ -4,7 +4,11 @@ using System.Text.Json;
 using Krosforge.Core;
 namespace Krosforge.Runtime.Native;
 
-internal sealed record CombatMonster(int Definition, int Grade, int Level, int Life, int ActionPoints, int MovementPoints, EntityLookWire Look);
+internal sealed record CombatMonster(int Definition, int Grade, int Level, int Life, int ActionPoints, int MovementPoints, EntityLookWire Look)
+{
+    internal CombatStatistics Statistics { get; init; } = CombatStatistics.Empty;
+    internal ImmutableArray<int> Spells { get; init; } = [];
+}
 internal sealed record CombatEncounter(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
     int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, CombatBoard Board);
 
@@ -40,7 +44,12 @@ internal sealed class CombatCatalog
             return new CombatEncounter(map.Id, definition.GroupId, definition.GroupCell, definition.Direction, definition.AttackDistance,
                 definition.FightType, definition.PlayerCell, definition.MonsterCell,
                 new(definition.MonsterId, definition.Grade, Number(grade, "level"), Number(grade, "lifePoints"),
-                    Number(grade, "actionPoints"), Number(grade, "movementPoints"), ParseLook((string)monster["look"])), board);
+                    Number(grade, "actionPoints"), Number(grade, "movementPoints"), ParseLook((string)monster["look"]))
+                {
+                    Statistics = CombatSpellCatalog.Statistics(grade),
+                    Spells = ((object[])((Dictionary<string, object>)monster["spells"]).Single().Value)
+                        .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToImmutableArray()
+                }, board);
         }).ToArray();
         Validate(world);
     }

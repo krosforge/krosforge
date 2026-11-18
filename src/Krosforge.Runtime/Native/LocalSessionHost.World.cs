@@ -120,6 +120,8 @@ internal sealed partial class LocalSessionHost
                             await output.Send(null, deadline.Token);
                             session.Phase("in-world");
                             continue;
+                        case "jok" when selected is { Fight: not null }:
+                            worldEntry!.CombatMove(selected, WorldMovementWire.Read(request.Payload)); continue;
                         case "jok" when selected is { MapReady: true }:
                             var movement = WorldMovementWire.Read(request.Payload);
                             diagnostic?.Invoke($"world-path actor={selected.Character.Id} map={movement.Map} cells={string.Join(',', movement.TurningCells)}");
@@ -139,6 +141,15 @@ internal sealed partial class LocalSessionHost
                         case "joc" when selected is { MapReady: true }:
                             worldEntry!.ChangeMap(selected, WorldMovementWire.ChangeMap(request.Payload));
                             continue;
+                        case "jsr" when selected is not null:
+                            var cast = CombatWire.CastRequest(request.Payload);
+                            worldEntry!.Cast(selected, cast.Spell, cast.Cell); continue;
+                        case "jst" when selected is not null:
+                            worldEntry!.CombatAcknowledge(selected, CombatWire.SequenceAcknowledgement(request.Payload)); continue;
+                        case "jwo" when selected is not null:
+                            body.Only(); worldEntry!.EndCombatTurn(selected); continue;
+                        case "jtd" when selected is not null:
+                            worldEntry!.CombatTurnReady(selected, CombatWire.Ready(request.Payload)); continue;
                         case "hms" when selected is not null:
                             worldEntry!.Attack(selected, CombatWire.Attack(request.Payload));
                             continue;

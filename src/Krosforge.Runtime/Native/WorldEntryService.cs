@@ -2,7 +2,7 @@ using Krosforge.Core;
 using Microsoft.Data.Sqlite;
 namespace Krosforge.Runtime.Native;
 
-internal sealed partial class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null, CombatCatalog? combat = null)
+internal sealed partial class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null, CombatCatalog? combat = null, CombatSpellCatalog? spells = null)
 {
     // Local accounts share one coordinator. It only holds short state/SQLite
     // operations; socket writes happen in independent bounded output queues.
