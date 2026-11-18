@@ -3,7 +3,7 @@ namespace Krosforge.Runtime;
 
 internal static class DatabaseSchema
 {
-    internal const int Current = 2;
+    internal const int Current = 3;
 
     internal static void Initialize(SqliteConnection db, string directory, Action? beforeCommit = null)
     {
@@ -17,7 +17,7 @@ internal static class DatabaseSchema
 
         // The writer lock excludes concurrent commits. A separate read connection
         // sees the last committed WAL snapshot without backing up an active writer.
-        if (version == 1) Backup(directory);
+        if (version > 0) Backup(directory, version);
         if (version == 0)
             Execute(db, """
                 CREATE TABLE profiles(id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, slot INTEGER NOT NULL UNIQUE);
@@ -27,7 +27,7 @@ internal static class DatabaseSchema
                 CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
                 CREATE TABLE cleanup(profile_id TEXT PRIMARY KEY);
                 """, transaction);
-        Execute(db, """
+        if (version < 2) Execute(db, """
             CREATE TABLE character_locations(
                 character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
                 map_id INTEGER NOT NULL CHECK(map_id>0),
@@ -36,17 +36,34 @@ internal static class DatabaseSchema
                 revision INTEGER NOT NULL CHECK(revision>0));
             PRAGMA user_version=2;
             """, transaction);
+        Execute(db, """
+            CREATE TABLE character_wallets(
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                balance INTEGER NOT NULL CHECK(typeof(balance)='integer' AND balance>=0));
+            CREATE TABLE combat_outcomes(
+                id TEXT PRIMARY KEY,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                encounter_id INTEGER NOT NULL,
+                map_id INTEGER NOT NULL,
+                cell_id INTEGER NOT NULL,
+                location_revision INTEGER NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('active','victory','defeat','abandoned','interrupted')),
+                reward INTEGER NOT NULL CHECK(typeof(reward)='integer' AND reward>=0),
+                duration_ms INTEGER NOT NULL CHECK(duration_ms>=0));
+            CREATE UNIQUE INDEX combat_active_character ON combat_outcomes(character_id) WHERE status='active';
+            PRAGMA user_version=3;
+            """, transaction);
         beforeCommit?.Invoke();
         transaction.Commit();
     }
 
-    private static void Backup(string directory)
+    private static void Backup(string directory, long version)
     {
         var folder = Path.Combine(directory, "backups");
         SafePaths.CheckTree(directory);
         Directory.CreateDirectory(folder);
         SafePaths.CheckTree(folder);
-        var destination = Path.Combine(folder, "schema-1-before-2-" + Guid.NewGuid().ToString("N") + ".db");
+        var destination = Path.Combine(folder, $"schema-{version}-before-{Current}-" + Guid.NewGuid().ToString("N") + ".db");
         var temporary = destination + ".tmp";
         try
         {
@@ -59,7 +76,7 @@ internal static class DatabaseSchema
                 source.BackupDatabase(target);
                 Execute(target, "PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;");
                 using var integrity = target.CreateCommand(); integrity.CommandText = "PRAGMA integrity_check";
-                if (!Equals(integrity.ExecuteScalar(), "ok") || Version(target) != 1)
+                if (!Equals(integrity.ExecuteScalar(), "ok") || Version(target) != version)
                     throw new IOException("Database backup verification failed.");
             }
             using (var file = new FileStream(temporary, FileMode.Open, FileAccess.ReadWrite, FileShare.None))

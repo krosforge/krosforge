@@ -60,7 +60,8 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                     var encounters = new CombatCatalog(target, world);
                     diagnostics ??= new SessionDiagnostics(dataRoot);
                     host = new LocalSessionHost(diagnostic: diagnostics.Write, characters: characters,
-                        worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), world, combat: encounters, spells: new CombatSpellCatalog(target)));
+                        worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), world, combat: encounters,
+                            spells: new CombatSpellCatalog(target), outcomes: new CombatOutcomeStore(dataRoot)));
                 }
                 if (!configured)
                 {

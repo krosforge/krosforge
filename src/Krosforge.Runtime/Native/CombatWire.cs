@@ -86,6 +86,7 @@ internal static partial class CombatWire
         FightAction action => ActionEvents(action),
         FightTurnEnding => [E("jug", [])],
         FightActionRejected => [],
+        FightCompleted completed => ResultEvents(completed),
         FightLeft left => [E("kjy", []), E("kjp", WorldEntryWire.Context()), E("jow", N(1, left.Map))],
         _ => throw new ArgumentOutOfRangeException(nameof(notice))
     };

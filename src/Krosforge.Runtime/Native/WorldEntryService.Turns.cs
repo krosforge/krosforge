@@ -126,6 +126,8 @@ internal sealed partial class WorldEntryService
     }
     private void PublishAction(Selection selection, FightSession fight, CombatAction action)
     {
+        // Persist a terminal action before its animation is published. Losing the ACK cannot lose or duplicate its reward.
+        if (fight.Turns!.Finished && outcomes is not null) CommitCombat(selection, fight, false);
         fight.Sequence = checked(++lastCombatSequence); fight.AnimationDeadline = After(combatTiming.AnimationMilliseconds);
         selection.Emit(new FightAction(selection.Character.Id, fight.Sequence.Value, action,
             fight.Turns!.Fighters.Single(f => f.Controlled), selection.Character.Level, selection.Attributes.NextLevelExperience));
@@ -138,7 +140,7 @@ internal sealed partial class WorldEntryService
             if (selection.Fight is not { Turns: not null } fight || fight.Sequence != sequence) return;
             if (clock.GetTimestamp() >= fight.AnimationDeadline) { selection.Dispose(); selection.Disconnect(); return; }
             fight.Sequence = null;
-            if (fight.Turns.Finished) return; // Completion owns durable outcome and world return.
+            if (fight.Turns.Finished) { if (outcomes is not null) FinishCombat(selection, fight, false); return; }
             if (fight.EndRequested || clock.GetTimestamp() >= fight.Deadline) EndTurn(selection, fight);
             else fight.AutomaticAt = After(combatTiming.AutomaticMilliseconds);
         }

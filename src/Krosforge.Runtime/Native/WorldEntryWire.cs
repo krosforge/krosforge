@@ -23,16 +23,16 @@ internal static class WorldEntryWire
     internal static byte[] Context() => N(1, 0);
     internal static byte[] LoadMap(long map) => N(1, map);
     internal static byte[] Reference(EntryMap map) => J(N(3, map.Id), N(5, map.Subarea));
-    internal static byte[] EmptyInventory() => J(B(3, []), N(4, 0));
-    internal static byte[] Statistics(WorldEntryService.Selection selection)
+    internal static byte[] EmptyInventory(long currency = 0) => J(B(3, []), N(4, currency));
+    internal static byte[] Statistics(WorldEntryService.Selection selection) => Statistics(selection.Attributes, selection.Character.Level);
+    internal static byte[] Statistics(EntryAttributes attributes, int level)
     {
-        var attributes = selection.Attributes;
         byte[] Simple(int id, long value) => B(1, J(N(2, id), B(3, N(2, value))));
         byte[] Usable(int id, int value) => B(1, J(N(2, id), B(1, J(N(4, value), N(7, 0)))));
         // StatId names recovered from the current metadata: HitPoints, MaxLifePoints,
         // Shield, HitPointLoss, CurPermanentDamage, Level, ActionPoints, MovementPoints.
         var stats = J(Usable(0, attributes.Life), Simple(95, attributes.Life), Simple(96, 0), Simple(97, 0),
-            Simple(5, selection.Character.Level), Usable(3, 0), Usable(11, 0), Simple(102, 0),
+            Simple(5, level), Usable(3, 0), Usable(11, 0), Simple(102, 0),
             Usable(1, attributes.ActionPoints), Usable(23, attributes.MovementPoints),
             N(11, 0), N(8, 0), N(2, attributes.NextLevelExperience), B(10, []));
         return B(1, stats);

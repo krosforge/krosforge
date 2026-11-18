@@ -2,7 +2,7 @@ using Krosforge.Core;
 using Microsoft.Data.Sqlite;
 namespace Krosforge.Runtime.Native;
 
-internal sealed partial class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null, CombatCatalog? combat = null, CombatSpellCatalog? spells = null)
+internal sealed partial class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null, CombatCatalog? combat = null, CombatSpellCatalog? spells = null, CombatOutcomeStore? outcomes = null)
 {
     // Local accounts share one coordinator. It only holds short state/SQLite
     // operations; socket writes happen in independent bounded output queues.
@@ -29,6 +29,7 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
         internal long Account { get; } = account;
         internal WorldLocation Location { get; set; } = null!;
         internal EntryAttributes Attributes => owner.catalog.Attributes;
+        internal long Currency { get; set; }
         internal EntryMap Map => owner.catalog.Map(Location.MapId);
         internal bool ContextCreated { get; set; }
         internal bool MapReady { get; set; }
@@ -56,7 +57,8 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             var selection = new Selection(this, profile, connection, character, account, emit ?? (_ => { }), disconnect ?? (() => { }))
             {
                 Location = location,
-                MovementAvailableAt = EarliestPredictionStart()
+                MovementAvailableAt = EarliestPredictionStart(),
+                Currency = outcomes?.Recover(profile, ServerPresentation.RealmId, id) ?? 0
             };
             active.Add(id, selection); return selection;
         }
