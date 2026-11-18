@@ -105,7 +105,9 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
     }
     private void AnnounceMovement(Selection selection, Motion motion)
     {
-        if (motion.Announced || Elapsed(motion) < TimeSpan.Zero) return;
+        // Native movement is predicted before the reply. Delaying its echo until
+        // the durable timeline catches up can overwrite a newer predicted path.
+        if (motion.Announced) return;
         motion.Announced = true;
         Broadcast(selection.Location.MapId, new ActorMoved(selection.Character.Id, motion.Path.Cells));
     }
@@ -175,7 +177,9 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             StopMotion(selection);
             selection.UnacknowledgedMotion = null;
             selection.Emit(new MovementReleased());
-            Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId));
+            // The owner already interrupted at this admitted cell. Repositioning
+            // it again disrupts its interpolated path and the next prediction.
+            Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId), except: selection);
         }
     }
     internal void Acknowledge(Selection selection)

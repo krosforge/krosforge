@@ -80,9 +80,11 @@ public sealed partial class WorldSessionTests
         f.Service.Cancel(a, 1); // Native client reports the active segment's destination.
         Assert.Equal(new WorldLocation(100, 1, 0, 2), a.Location);
         Assert.Equal(1, observer.OfType<ActorCorrected>().Last().Cell);
-        Assert.IsType<MovementReleased>(notices[^2]);
+        Assert.IsType<MovementReleased>(notices[^1]);
+        Assert.Empty(notices.OfType<ActorCorrected>()); // Preserve the owner's interpolation.
         f.Service.Move(a, new(100, [1, 3], 0)); var redirected = a.Moving!;
-        Assert.Single(observer.OfType<ActorMoved>()); // Do not start the client animation before its server timeline.
+        Assert.Equal(2, observer.OfType<ActorMoved>().Count()); // Echo now, before another predicted destination.
+        Assert.Equal(new[] { 1, 2, 3 }, Assert.IsType<ActorMoved>(notices[^1]).Cells);
         await pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         f.Service.Advance(a, old); Assert.Same(redirected, a.Moving);
         f.Clock.Advance(TimeSpan.FromMilliseconds(2399)); f.Service.Advance(a, redirected);
