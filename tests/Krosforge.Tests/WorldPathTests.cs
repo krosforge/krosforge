@@ -8,6 +8,19 @@ public sealed class WorldPathTests
     private static MovementGrid Grid(Func<int, bool>? include = null) => new(14, Enumerable.Range(0, 560)
         .Where(id => include?.Invoke(id) ?? true).Select(id => new MovementCell(id, 0, 1)));
     [Fact]
+    public void DirectionalTimingAdmitsOnlyTheActiveSegmentForNativeInterruption()
+    {
+        var policy = Policy with { Timing = new(170, 255, 150), CancellationLeadSteps = 1 };
+        var path = Grid().Validate(356, [356, 313, 257], 0, policy)!;
+        Assert.Equal(new[] { 356, 342, 327, 313, 285, 257 }, path.Cells);
+        Assert.Equal(new[] { 0d, 170, 340, 510, 660, 810 }, path.ArrivalTimes.Select(t => t.TotalMilliseconds));
+        Assert.True(path.CanCancel(285, TimeSpan.FromMilliseconds(632)));
+        Assert.False(path.CanCancel(257, TimeSpan.FromMilliseconds(632)));
+        Assert.False(path.CanCancel(342, TimeSpan.Zero));
+        Assert.False(path.CanCancel(342, TimeSpan.FromMilliseconds(-1)));
+        Assert.Equal(TimeSpan.FromMilliseconds(255), Grid().Validate(0, [0, 1], 0, policy)!.Duration);
+    }
+    [Fact]
     public void ExpandsTurnsAndChecksEveryCellAndElapsedArrival()
     {
         var path = Grid().Validate(0, [0, 3], 7, Policy);

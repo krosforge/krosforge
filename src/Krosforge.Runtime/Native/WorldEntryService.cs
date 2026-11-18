@@ -32,6 +32,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         internal Action<WorldNotice> Emit { get; } = emit;
         internal Action Disconnect { get; } = disconnect;
         internal Motion? Moving { get; set; }
+        internal long MovementAvailableAt { get; set; }
         internal Task MovementCompletion { get; set; } = Task.CompletedTask;
         public void Dispose() => owner.Release(this);
     }
@@ -84,7 +85,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             var path = request.Map == selection.Location.MapId
                 ? selection.Map.Movement!.Validate(selection.Location.CellId, request.TurningCells, request.Direction, catalog.Movement) : null;
             if (selection.Moving is not null || path is null) { Reject(selection); return; }
-            var motion = new Motion(path, request.TurningCells.ToArray(), clock.GetTimestamp());
+            var motion = new Motion(path, request.TurningCells.ToArray(), Math.Max(clock.GetTimestamp(), selection.MovementAvailableAt));
             selection.Moving = motion;
             Broadcast(selection.Location.MapId, new ActorMoved(selection.Character.Id, path.Cells));
             selection.MovementCompletion = CompleteLater(selection, motion);
@@ -136,12 +137,13 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             CompleteExpiredMotion(selection);
             if (selection.Moving is not { } motion || !motion.Path.CanCancel(cell, Elapsed(motion))) { Reject(selection); return; }
             var index = Array.IndexOf(motion.Path.Cells.ToArray(), cell);
-            var facing = index == 0 ? selection.Location.Direction : selection.Map.Movement!.Facing(motion.Path.Cells[index - 1], cell);
-            if (cell != selection.Location.CellId || facing != selection.Location.Direction)
-                Persist(selection, selection.Location with { CellId = cell, Direction = facing, Revision = checked(selection.Location.Revision + 1) });
+            PersistCell(selection, motion.Path, index);
+            // Preserve the unfinished segment's time across repeated redirects.
+            var arrival = checked(motion.Started + (long)Math.Ceiling(motion.Path.ArrivalAt(index).TotalSeconds * clock.TimestampFrequency));
+            selection.MovementAvailableAt = Math.Max(selection.MovementAvailableAt, arrival);
             StopMotion(selection);
-            Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId));
             selection.Emit(new MovementReleased());
+            Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId));
         }
     }
     internal void ChangeMap(Selection selection, long destination)
@@ -151,7 +153,8 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
             CompleteExpiredMotion(selection);
-            var next = selection.Moving is null ? catalog.Transition(selection.Location, destination) : null;
+            var next = selection.Moving is null && clock.GetTimestamp() >= selection.MovementAvailableAt
+                ? catalog.Transition(selection.Location, destination) : null;
             if (next is null) { Reject(selection); return; }
             var previousMap = selection.Location.MapId;
             Persist(selection, next);
@@ -165,11 +168,20 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         locations.Save(selection.Profile, ServerPresentation.RealmId, selection.Character.Id, selection.Location, next, catalog.Validate);
         selection.Location = next;
     }
+    private void PersistCell(Selection selection, WorldPath path, int index)
+    {
+        var cell = path.Cells[index];
+        var facing = index == 0 ? selection.Location.Direction : selection.Map.Movement!.Facing(path.Cells[index - 1], cell);
+        if (cell != selection.Location.CellId || facing != selection.Location.Direction)
+            Persist(selection, selection.Location with { CellId = cell, Direction = facing, Revision = checked(selection.Location.Revision + 1) });
+    }
     private void Reject(Selection selection)
     {
+        // A bad request stops at the reached cell, never at the old path's origin.
+        if (selection.Moving is { } motion) PersistCell(selection, motion.Path, motion.Path.ReachedIndex(Elapsed(motion)));
         StopMotion(selection);
-        Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId));
         selection.Emit(new MovementReleased());
+        Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId));
     }
     private static void StopMotion(Selection selection)
     {

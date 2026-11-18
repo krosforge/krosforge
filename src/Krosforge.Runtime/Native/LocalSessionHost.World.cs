@@ -82,7 +82,11 @@ internal sealed partial class LocalSessionHost
                             pendingDeletion = null;
                             var selectedId = characterWire.SelectionId(request.Payload);
                             if (selected is null) selected = worldEntry?.Select(session.Profile.Id, session.Profile.Slot, connectionIdentity, selectedId, notice =>
-                            { foreach (var frame in WorldEntryWire.Events(notice)) output.Post(frame); }, output.Abort);
+                            {
+                                if (notice is ActorCorrected correction)
+                                    diagnostic?.Invoke($"world-correction actor={correction.Id} cell={correction.Cell}");
+                                foreach (var frame in WorldEntryWire.Events(notice)) output.Post(frame);
+                            }, output.Abort);
                             if (selected is not null && selected.Character.Id != selectedId) throw new ProtocolException("Character already selected.");
                             reply = WorldProtocol.Event("ksb", selected is null ? characterWire.SelectionRejected() : characterWire.SelectionAccepted(selected.Character));
                             break;
@@ -127,7 +131,9 @@ internal sealed partial class LocalSessionHost
                             WorldMovementWire.Acknowledgement(request.Payload);
                             continue;
                         case "jpj" when selected is { MapReady: true }:
-                            worldEntry!.Cancel(selected, WorldMovementWire.Cancellation(request.Payload));
+                            var cancellation = WorldMovementWire.Cancellation(request.Payload);
+                            diagnostic?.Invoke($"world-cancel cell={cancellation}");
+                            worldEntry!.Cancel(selected, cancellation);
                             continue;
                         case "joc" when selected is { MapReady: true }:
                             worldEntry!.ChangeMap(selected, WorldMovementWire.ChangeMap(request.Payload));

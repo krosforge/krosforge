@@ -2,7 +2,15 @@ using System.Collections.Frozen;
 namespace Krosforge.Core;
 
 public sealed record MovementCell(int Id, int Altitude, int Zone);
-public sealed record MovementPolicy(int Columns, int MaximumCells, int StepMilliseconds);
+public sealed record MovementTiming(int DiagonalMilliseconds, int HorizontalMilliseconds, int VerticalMilliseconds)
+{
+    public bool IsValid => DiagonalMilliseconds is > 0 and <= 5000 && HorizontalMilliseconds is > 0 and <= 5000 && VerticalMilliseconds is > 0 and <= 5000;
+}
+public sealed record MovementPolicy(int Columns, int MaximumCells, int StepMilliseconds)
+{
+    public MovementTiming? Timing { get; init; }
+    public int CancellationLeadSteps { get; init; }
+}
 
 // Geometry and elapsed time are independent of the client protocol and storage.
 public sealed class MovementGrid
@@ -35,7 +43,8 @@ public sealed class MovementGrid
     }
     public WorldPath? Validate(int source, IReadOnlyList<int> turns, int direction, MovementPolicy policy)
     {
-        if (policy.Columns != columns || policy.MaximumCells < 2 || policy.StepMilliseconds <= 0)
+        if (policy.Columns != columns || policy.MaximumCells < 2 || policy.StepMilliseconds <= 0 ||
+            policy.CancellationLeadSteps is < 0 or > 1 || policy.Timing is { IsValid: false })
             throw new ArgumentException("Invalid movement policy.");
         if (direction is < 0 or > 7 || turns.Count < 2 || turns.Count > policy.MaximumCells ||
             turns[0] != source || turns[^1] == source || !cells.TryGetValue(source, out var origin) ||
@@ -58,17 +67,38 @@ public sealed class MovementGrid
                 path.Add(cell);
             }
         }
-        return new WorldPath(path.ToArray(), Facing(path[^2], path[^1]), TimeSpan.FromMilliseconds(policy.StepMilliseconds));
+        var arrivals = new TimeSpan[path.Count];
+        for (var i = 1; i < path.Count; i++)
+        {
+            var facing = Facing(path[i - 1], path[i]);
+            var milliseconds = policy.Timing is not { } timing ? policy.StepMilliseconds
+                : facing % 2 != 0 ? timing.DiagonalMilliseconds
+                : facing is 0 or 4 ? timing.HorizontalMilliseconds : timing.VerticalMilliseconds;
+            arrivals[i] = arrivals[i - 1] + TimeSpan.FromMilliseconds(milliseconds);
+        }
+        return new WorldPath(path.ToArray(), Facing(path[^2], path[^1]), TimeSpan.FromMilliseconds(policy.StepMilliseconds))
+        { ArrivalTimes = arrivals, CancellationLeadSteps = policy.CancellationLeadSteps };
     }
 }
 
 public sealed record WorldPath(IReadOnlyList<int> Cells, int Direction, TimeSpan StepDuration)
 {
-    public TimeSpan Duration => StepDuration * (Cells.Count - 1);
-    public int ReachedIndex(TimeSpan elapsed) => (int)Math.Clamp(elapsed.Ticks / StepDuration.Ticks, 0, Cells.Count - 1);
+    public IReadOnlyList<TimeSpan> ArrivalTimes { get; init; } = [];
+    public int CancellationLeadSteps { get; init; }
+    public TimeSpan ArrivalAt(int index) => ArrivalTimes.Count == 0 ? StepDuration * index : ArrivalTimes[index];
+    public TimeSpan Duration => ArrivalAt(Cells.Count - 1);
+    public int ReachedIndex(TimeSpan elapsed)
+    {
+        var index = 0;
+        while (index + 1 < Cells.Count && ArrivalAt(index + 1) <= elapsed) index++;
+        return index;
+    }
     public bool CanCancel(int cell, TimeSpan elapsed)
     {
-        for (var i = 0; i <= ReachedIndex(elapsed); i++) if (Cells[i] == cell) return true;
+        // The native interruption names the destination of the segment in progress.
+        // Before a deferred start, no new segment has earned that allowance.
+        var maximum = Math.Min(Cells.Count - 1, ReachedIndex(elapsed) + (elapsed > TimeSpan.Zero ? CancellationLeadSteps : 0));
+        for (var i = 0; i <= maximum; i++) if (Cells[i] == cell) return true;
         return false;
     }
 }

@@ -23,6 +23,48 @@ public sealed partial class WorldSessionTests
     }
     private static ulong[] ActorIds(ProtoObject snapshot) => snapshot.Repeated(3).Select(f => ProtoObject.Read(f.Bytes, 128).UInt64(1)).ToArray();
     [Fact]
+    public async Task TcpRapidRedirectionCorrectsToTheActiveSegmentAndPreservesRemainingTime()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "redirect-tcp-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var profiles = new ProfileStore(root); var a = profiles.Create("Alpha"); var b = profiles.Create("Beta");
+            var store = new CharacterStore(root); var ca = CreateCharacter(store, a.Id, "Hero"); var cb = CreateCharacter(store, b.Id, "Other");
+            var catalog = MovementCatalog(1000, 1); var locations = new LocationStore(root); var clock = new MovementClock();
+            var service = new WorldEntryService(new(store, SyntheticCatalog()), locations, catalog, clock);
+            await using var host = new LocalSessionHost(characters: new(store, SyntheticCatalog()), worldEntry: service);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10)); var token = timeout.Token;
+            using var sa = host.Register(a, "pt", _ => { }); using var sb = host.Register(b, "pt", _ => { });
+            using var la = new TcpClient(); using var lb = new TcpClient();
+            await Login(host, la, sa.IssueTicket(), token); await Login(host, lb, sb.IssueTicket(), token);
+            using var wa = await Enter(host, la, token, emptyRoster: false); using var wb = await Enter(host, lb, token, emptyRoster: false);
+            wa.NoDelay = true; wb.NoDelay = true;
+            await EnterMap(wa, ca, 100, token); await EnterMap(wb, cb, 100, token); await Event(wa, "jns", token);
+            await Send(wa, "jok", Convert.FromHexString("0a0200031064"), token);
+            await Event(wa, "jnz", token); await Event(wb, "jnz", token);
+            clock.Advance(TimeSpan.FromMilliseconds(600));
+            await Send(wa, "jpj", Convert.FromHexString("0801"), token);
+            await Event(wa, "jpk", token);
+            foreach (var socket in new[] { wa, wb })
+            {
+                var correction = await Event(socket, "joz", token);
+                Assert.Equal(1UL, correction.UInt64(1)); Assert.Equal((ulong)ca, correction.UInt64(2));
+            }
+            await Send(wa, "jok", Convert.FromHexString("0a0201001064"), token);
+            foreach (var socket in new[] { wa, wb })
+                Assert.Equal(new byte[] { 1, 0 }, (await Event(socket, "jnz", token)).Bytes(1));
+            await Send(wa, "jny", [], token); // Old animation ACK cannot finish the new path.
+            clock.Advance(TimeSpan.FromMilliseconds(1000));
+            await Send(wa, "kne", [], token); await Event(wa, "knb", token);
+            Assert.Equal(new WorldLocation(100, 1, 0, 2), locations.LoadOrCreate(a.Id, 290, ca, catalog.Initial, catalog.Validate));
+            clock.Advance(TimeSpan.FromMilliseconds(400)); await Event(wa, "jpk", token);
+            Assert.Equal(new WorldLocation(100, 0, 4, 3), locations.LoadOrCreate(a.Id, 290, ca, catalog.Initial, catalog.Validate));
+            Assert.Equal(catalog.Initial, locations.LoadOrCreate(b.Id, 290, cb, catalog.Initial, catalog.Validate));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+    [Fact]
     public async Task TcpPresenceMovementTransitionsAndReconnectKeepAccountsAndMapsIsolated()
     {
         var root = Path.Combine(Path.GetTempPath(), "motion-tcp-" + Guid.NewGuid().ToString("N"));
