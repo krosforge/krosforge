@@ -7,25 +7,28 @@ namespace Krosforge.Tests;
 
 public sealed partial class WorldSessionTests
 {
-    private sealed class MovementClock : TimeProvider
+    private sealed class MovementClock(bool deferTimers = false) : TimeProvider
     {
         private long now;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public override long GetTimestamp() => Interlocked.Read(ref now);
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            base.CreateTimer(callback, state, deferTimers ? Timeout.InfiniteTimeSpan : dueTime, period);
         internal void Advance(TimeSpan elapsed) => Interlocked.Add(ref now, elapsed.Ticks);
     }
     private sealed class MovementFixture : IDisposable
     {
         internal readonly string Root = Path.Combine(Path.GetTempPath(), "motion-" + Guid.NewGuid().ToString("N"));
-        internal readonly MovementClock Clock = new();
+        internal readonly MovementClock Clock;
         internal readonly ProfileStore Profiles;
         internal readonly CharacterStore Characters;
         internal readonly WorldEntryCatalog Catalog;
         internal readonly WorldEntryService Service;
         internal readonly LocationStore Locations;
         private readonly List<WorldEntryService.Selection> selections = [];
-        internal MovementFixture()
+        internal MovementFixture(bool deferTimers = false)
         {
+            Clock = new(deferTimers);
             Profiles = new(Root); Characters = new(Root); Locations = new(Root);
             Catalog = MovementCatalog(1000);
             Service = new(new CharacterService(Characters, SyntheticCatalog()), Locations, Catalog, Clock);
@@ -87,6 +90,57 @@ public sealed partial class WorldSessionTests
         Assert.Equal(2, a.Location.CellId); Assert.Null(a.Moving);
         Assert.Equal(2, notices.OfType<ActorMoved>().Count());
         Assert.Equal(a.Location, f.Locations.LoadOrCreate(a.Profile, 290, a.Character.Id, f.Catalog.Initial, f.Catalog.Validate));
+    }
+    [Theory]
+    [InlineData("move")]
+    [InlineData("transition")]
+    [InlineData("cancel")]
+    [InlineData("invalid-move")]
+    [InlineData("duplicate-move")]
+    public async Task NextActionCommitsExpiredMovementBeforeValidationWithoutTimerContinuation(string action)
+    {
+        // Advance monotonic time without dispatching the timer: the request wins the coordinator.
+        using var f = new MovementFixture(deferTimers: true); var (a, notices) = f.Join("Alpha");
+        var (_, observer) = f.Join("Beta");
+        f.Service.Move(a, new(100, [0, 2], 0));
+        var pending = a.MovementCompletion;
+        f.Clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.False(pending.IsCompleted); Assert.Equal(0, a.Location.CellId);
+        notices.Clear(); observer.Clear();
+
+        switch (action)
+        {
+            case "move": f.Service.Move(a, new(100, [2, 3], 0)); break;
+            case "transition": f.Service.ChangeMap(a, 200); break;
+            case "cancel": f.Service.Cancel(a, 1); break;
+            case "invalid-move": f.Service.Move(a, new(100, [2, 500], 0)); break;
+            case "duplicate-move": f.Service.Move(a, new(100, [0, 2], 0)); break;
+        }
+
+        var expected = action == "transition" ? new WorldLocation(200, 0, 0, 3) : new WorldLocation(100, 2, 0, 2);
+        Assert.Equal(expected, a.Location);
+        Assert.Equal(expected, f.Locations.LoadOrCreate(a.Profile, 290, a.Character.Id, f.Catalog.Initial, f.Catalog.Validate));
+        Assert.IsType<MovementReleased>(notices[0]);
+        if (action == "move")
+        {
+            Assert.NotNull(a.Moving);
+            Assert.Equal(new[] { 2, 3 }, Assert.IsType<ActorMoved>(notices[1]).Cells);
+            Assert.DoesNotContain(notices, n => n is ActorCorrected);
+        }
+        else if (action == "transition")
+        {
+            Assert.Null(a.Moving); Assert.False(a.MapReady);
+            Assert.Equal(a.Character.Id, Assert.Single(observer.OfType<ActorDeparted>()).Id);
+            Assert.IsType<MapLoading>(notices[1]);
+        }
+        else
+        {
+            Assert.Null(a.Moving);
+            Assert.Equal(2, Assert.Single(notices.OfType<ActorCorrected>()).Cell);
+        }
+        await pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(expected, a.Location); // The cancelled old continuation cannot overwrite the next action.
+        a.Dispose(); await a.MovementCompletion.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
     [Fact]
     public async Task PresenceSnapshotMovementAndTransitionRemainScopedAndOrdered()

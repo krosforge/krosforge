@@ -6,7 +6,7 @@ The runtime validates every cell between requested turning points against geomet
 
 ## Confirmation and persistence
 
-A movement has a distinct runtime identity and a monotonic start time. An animation acknowledgement carries no movement identifier in this client protocol, so it cannot advance time or save a location. The runtime commits the endpoint after the admitted duration. Cancellation can commit only a cell on the elapsed prefix. A disconnect before completion discards the pending path and restores the last confirmed location on reentry.
+A movement has a distinct runtime identity and a monotonic start time. An animation acknowledgement carries no movement identifier in this client protocol, so it cannot advance time or save a location. The runtime commits the endpoint after the admitted duration. Before validating another movement, cancellation or map transition, the coordinator commits any elapsed movement under the same lock, even if its timer continuation has not run yet. Cancellation can commit only a cell on the elapsed prefix. A disconnect before completion discards the pending path and restores the last confirmed location on reentry.
 
 SQLite updates compare the expected character owner and complete previous location/revision in a short transaction. A duplicate or stale operation cannot overwrite a newer revision. The in-memory confirmed location changes only after commit. Persistence failure ends the affected session; an old timer or cleanup cannot modify its replacement. No frame-by-frame database writes are needed.
 

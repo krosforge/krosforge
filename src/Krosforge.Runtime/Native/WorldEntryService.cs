@@ -79,6 +79,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         {
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
+            CompleteExpiredMotion(selection);
             if (selection.Moving is { } previous && request.Map == selection.Location.MapId && request.TurningCells.SequenceEqual(previous.Turns)) return;
             var path = request.Map == selection.Location.MapId
                 ? selection.Map.Movement!.Validate(selection.Location.CellId, request.TurningCells, request.Direction, catalog.Movement) : null;
@@ -113,11 +114,18 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
     {
         lock (gate)
         {
-            if (!Current(selection) || !ReferenceEquals(selection.Moving, motion) || Elapsed(motion) < motion.Path.Duration) return;
-            Persist(selection, selection.Location with { CellId = motion.Path.Cells[^1], Direction = motion.Path.Direction, Revision = checked(selection.Location.Revision + 1) });
-            StopMotion(selection);
-            selection.Emit(new MovementReleased());
+            if (!Current(selection) || !ReferenceEquals(selection.Moving, motion)) return;
+            CompleteExpiredMotion(selection);
         }
+    }
+    // Called under gate by both the timer and incoming actions. Scheduling delay
+    // must not turn an elapsed movement into a rejection or a partial cancellation.
+    private void CompleteExpiredMotion(Selection selection)
+    {
+        if (selection.Moving is not { } motion || Elapsed(motion) < motion.Path.Duration) return;
+        Persist(selection, selection.Location with { CellId = motion.Path.Cells[^1], Direction = motion.Path.Direction, Revision = checked(selection.Location.Revision + 1) });
+        StopMotion(selection);
+        selection.Emit(new MovementReleased());
     }
     internal void Cancel(Selection selection, int cell)
     {
@@ -125,6 +133,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         {
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
+            CompleteExpiredMotion(selection);
             if (selection.Moving is not { } motion || !motion.Path.CanCancel(cell, Elapsed(motion))) { Reject(selection); return; }
             var index = Array.IndexOf(motion.Path.Cells.ToArray(), cell);
             var facing = index == 0 ? selection.Location.Direction : selection.Map.Movement!.Facing(motion.Path.Cells[index - 1], cell);
@@ -141,6 +150,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         {
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
+            CompleteExpiredMotion(selection);
             var next = selection.Moving is null ? catalog.Transition(selection.Location, destination) : null;
             if (next is null) { Reject(selection); return; }
             var previousMap = selection.Location.MapId;
