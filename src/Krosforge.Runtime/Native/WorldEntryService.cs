@@ -2,7 +2,7 @@ using Krosforge.Core;
 using Microsoft.Data.Sqlite;
 namespace Krosforge.Runtime.Native;
 
-internal sealed class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null)
+internal sealed partial class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null, CombatCatalog? combat = null)
 {
     // Local accounts share one coordinator. It only holds short state/SQLite
     // operations; socket writes happen in independent bounded output queues.
@@ -39,6 +39,10 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         internal long MovementAvailableAt { get; set; }
         internal int? InterruptedFrom { get; set; }
         internal Task MovementCompletion { get; set; } = Task.CompletedTask;
+        internal FightSession? Fight { get; set; }
+        internal CombatEncounter? PendingAttack { get; set; }
+        internal Task AttackWait { get; set; } = Task.CompletedTask;
+        internal CancellationTokenSource Lifetime { get; } = new();
         public void Dispose() => owner.Release(this);
     }
     internal Selection? Select(Guid profile, long account, object connection, long id, Action<WorldNotice>? emit = null, Action? disconnect = null)
@@ -67,12 +71,13 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         lock (gate)
         {
             Require(selection);
+            if (selection.Fight is not null) { JoinFight(selection, map); return; }
             if (!selection.ContextCreated || selection.Location.MapId != map) throw new InvalidDataException("Map load does not match selection.");
             var first = !selection.MapReady;
             selection.MapReady = true;
             var now = clock.GetTimestamp();
             var visible = Members(map).OrderBy(s => s.Character.Id).ToArray();
-            selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray()));
+            selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray(), AvailableEncounters(map), combat?.NeutralCalendar));
             foreach (var other in visible)
                 if (other.Moving is { Announced: true } motion)
                 {
@@ -89,6 +94,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         {
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
+            selection.PendingAttack = null;
             CompleteExpiredMotion(selection);
             if (selection.Moving is { } previous && request.Map == selection.Location.MapId && request.TurningCells.SequenceEqual(previous.Turns)) return;
             var path = request.Map == selection.Location.MapId
@@ -183,6 +189,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             if (!Current(selection) || !ReferenceEquals(selection.Moving, motion)) return;
             AnnounceMovement(selection, motion);
             CompleteExpiredMotion(selection);
+            TryPendingAttack(selection);
         }
     }
     // Called under gate by both the timer and incoming actions. Scheduling delay
@@ -202,6 +209,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         {
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
+            selection.PendingAttack = null;
             CompleteExpiredMotion(selection);
             var motion = selection.Moving ?? selection.UnacknowledgedMotion;
             if (motion is null || !motion.Path.CanCancel(cell, Elapsed(motion))) { Reject(selection); return; }
@@ -232,6 +240,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         {
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
+            selection.PendingAttack = null;
             CompleteExpiredMotion(selection);
             var next = selection.Moving is null && clock.GetTimestamp() >= selection.MovementAvailableAt
                 ? catalog.Transition(selection.Location, destination) : null;
@@ -310,6 +319,9 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         lock (gate)
         {
             if (!Current(selection)) return;
+            selection.PendingAttack = null;
+            ReleaseFight(selection);
+            selection.Lifetime.Cancel(); selection.Lifetime.Dispose();
             StopMotion(selection); active.Remove(selection.Character.Id);
             if (selection.MapReady) Broadcast(selection.Location.MapId, new ActorDeparted(selection.Character.Id));
             selection.MapReady = false;

@@ -6,6 +6,7 @@ internal sealed record EntryAttributes(int Life, int ActionPoints, int MovementP
 internal sealed record EntryMap(long Id, int Subarea, IReadOnlySet<int> WalkableCells)
 {
     internal MovementGrid? Movement { get; init; }
+    internal CombatBoard? Combat { get; init; }
 }
 internal sealed record MapTransition(long Source, long Destination, string Side, int ExitCell, int ArrivalCell, int Direction);
 internal sealed class WorldEntryCatalog
@@ -55,6 +56,7 @@ internal sealed class WorldEntryCatalog
         maps = installed.Values.ToDictionary(m => m.Id, m => new EntryMap(m.Id, m.Subarea,
             m.Cells.Where(c => c.Walkable).Select(c => c.Id).ToHashSet())
         {
+            Combat = CombatCatalog.ReadBoard(geometry.Single(row => (int)row["id"] == m.Id)),
             Movement = new MovementGrid(Movement.Columns, m.Cells.Where(c => c.Walkable)
                 .Select(c => new MovementCell(c.Id, c.Altitude, c.RoleplayZone)))
         });

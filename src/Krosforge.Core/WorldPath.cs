@@ -42,6 +42,35 @@ public sealed class MovementGrid
             _ => throw new ArgumentException("Facing requires distinct cells.")
         };
     }
+    public int Distance(int source, int destination)
+    {
+        var a = Coordinate(source); var b = Coordinate(destination);
+        return Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
+    }
+    public IReadOnlyList<int>? Approach(int source, int target, int distance, MovementPolicy policy)
+    {
+        if (!cells.ContainsKey(source) || !cells.ContainsKey(target) || distance < 1) return null;
+        var previous = new Dictionary<int, int> { [source] = source };
+        var pending = new Queue<int>(); pending.Enqueue(source);
+        while (pending.TryDequeue(out var cell))
+        {
+            if (Distance(cell, target) <= distance)
+            {
+                var path = new List<int> { cell };
+                while (path[^1] != source) path.Add(previous[path[^1]]);
+                path.Reverse(); return path.Count <= policy.MaximumCells ? path : null;
+            }
+            var position = Coordinate(cell);
+            for (var dx = -1; dx <= 1; dx++)
+            for (var dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0 || !coordinates.TryGetValue((position.X + dx, position.Y + dy), out var next) ||
+                    next == target || previous.ContainsKey(next) || Validate(cell, [cell, next], 0, policy) is null) continue;
+                previous.Add(next, cell); pending.Enqueue(next);
+            }
+        }
+        return null;
+    }
     public WorldPath? Validate(int source, IReadOnlyList<int> turns, int direction, MovementPolicy policy)
     {
         if (policy.Columns != columns || policy.MaximumCells < 2 || policy.StepMilliseconds <= 0 ||

@@ -56,9 +56,11 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                 if (host is null)
                 {
                     var characters = new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target));
+                    var world = new WorldEntryCatalog(target);
+                    var encounters = new CombatCatalog(target, world);
                     diagnostics ??= new SessionDiagnostics(dataRoot);
                     host = new LocalSessionHost(diagnostic: diagnostics.Write, characters: characters,
-                        worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), new WorldEntryCatalog(target)));
+                        worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), world, combat: encounters));
                 }
                 if (!configured)
                 {

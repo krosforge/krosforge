@@ -139,6 +139,19 @@ internal sealed partial class LocalSessionHost
                         case "joc" when selected is { MapReady: true }:
                             worldEntry!.ChangeMap(selected, WorldMovementWire.ChangeMap(request.Payload));
                             continue;
+                        case "hms" when selected is not null:
+                            worldEntry!.Attack(selected, CombatWire.Attack(request.Payload));
+                            continue;
+                        case "jxb" when selected is not null:
+                            var placement = CombatWire.Placement(request.Payload);
+                            worldEntry!.Place(selected, placement.Actor, placement.Cell);
+                            continue;
+                        case "jxj" when selected is not null:
+                            worldEntry!.Ready(selected, CombatWire.Ready(request.Payload));
+                            continue;
+                        case "kjx" when selected is not null:
+                            body.Only(); worldEntry!.Forfeit(selected);
+                            continue;
                         case "kkc": throw new ProtocolException("No character selected.");
                         default:
                             if (!ready || ++unsupported > 128) throw new ProtocolException("Unsupported request budget exceeded.");
