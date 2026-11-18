@@ -45,7 +45,7 @@ public sealed class RewardWireTests
             Award = new(125, [new(100, 2), new(100, 3)]),
             State = new(235, [new(42, 100, 8, "[]")])
         };
-        EntryAttributes attributes = new(100, 6, 3, 650) { Experience = 235, ExperienceFloor = 110 };
+        EntryAttributes attributes = new(100, 6, 3, 650) { Experience = 235, ExperienceFloor = 110, Currency = 7 };
         var result = new FightCompleted(character, attributes, [new(1, true, true, 2), new(-1, false, false, null)], receipt, new());
         var frames = CombatWire.Events(result).Select(frame =>
         {
@@ -63,7 +63,9 @@ public sealed class RewardWireTests
         Assert.Equal(5UL, item.UInt64(1)); Assert.Equal(100UL, item.UInt64(3));
         var inventory = Read(frames.Single(frame => frame.Type == "irl").Payload);
         Assert.Equal(7UL, inventory.UInt64(4));
+        Assert.Equal(7UL, Read(frames.Single(frame => frame.Type == "ith").Payload).UInt64(2));
         var common = Read(Read(inventory.Repeated(2).Single().Bytes).Bytes(1)); Assert.Equal(8UL, common.UInt64(3));
         Assert.Equal(235UL, Read(Read(frames.Single(frame => frame.Type == "krg").Payload).Bytes(1)).UInt64(11));
+        Assert.Equal(7UL, Read(Read(frames.Single(frame => frame.Type == "krg").Payload).Bytes(1)).UInt64(6));
     }
 }

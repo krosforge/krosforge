@@ -13,7 +13,7 @@ public sealed partial class WorldSessionTests
         await Send(world, "kta", WorldProtocol.Number(1, (ulong)id), token); await Event(world, "ksb", token);
         await Send(world, "kkc", [], token); await Event(world, "kjp", token);
         Assert.Equal((ulong)map, (await Event(world, "jow", token)).UInt64(1));
-        await Event(world, "irl", token); await Event(world, "krg", token);
+        await Event(world, "irl", token); await Event(world, "ith", token); await Event(world, "krg", token);
         return await LoadedMap(world, map, token);
     }
     private static async Task<ProtoObject> LoadedMap(TcpClient world, long map, CancellationToken token)

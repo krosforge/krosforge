@@ -52,6 +52,7 @@ public sealed partial class WorldSessionTests
             Assert.Equal(0UL, (await Event(world, "kjp", token)).UInt64(1));
             Assert.Equal(100UL, (await Event(world, "jow", token)).UInt64(1));
             var inventory = await Event(world, "irl", token); Assert.Equal(0UL, inventory.UInt64(4)); Assert.True(inventory.Has(3));
+            Assert.Equal(0UL, (await Event(world, "ith", token)).UInt64(2));
             var statistics = ProtoObject.Read((await Event(world, "krg", token)).Bytes(1), 128);
             Assert.Equal(110UL, statistics.UInt64(2));
             var entries = statistics.Repeated(1).Select(f => ProtoObject.Read(f.Bytes, 128)).ToDictionary(e => e.UInt64(2));
@@ -68,7 +69,7 @@ public sealed partial class WorldSessionTests
             using var fresh = new TcpClient(); await Login(host, fresh, session.IssueTicket(), token);
             using var reentered = await Enter(host, fresh, token, emptyRoster: false);
             await Send(reentered, "kta", WorldProtocol.Number(1, (ulong)id), token); Assert.True((await Event(reentered, "ksb", token)).Has(1));
-            await Send(reentered, "kkc", [], token); await Event(reentered, "kjp", token); await Event(reentered, "jow", token); await Event(reentered, "irl", token); await Event(reentered, "krg", token);
+            await Send(reentered, "kkc", [], token); await Event(reentered, "kjp", token); await Event(reentered, "jow", token); await Event(reentered, "irl", token); await Event(reentered, "ith", token); await Event(reentered, "krg", token);
             await AssertMap(reentered, id, a.Slot, token);
             await Send(otherWorld, "kne", WorldProtocol.Number(2, 1), token); await Event(otherWorld, "knb", token);
             Assert.Equal(new WorldLocation(100, 10, 3, 1), new LocationStore(root).LoadOrCreate(a.Id, 290, id,

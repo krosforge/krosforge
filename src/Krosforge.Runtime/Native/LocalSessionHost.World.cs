@@ -110,6 +110,7 @@ internal sealed partial class LocalSessionHost
                             await output.Send(WorldProtocol.Event("kjp", WorldEntryWire.Context()), deadline.Token);
                             await output.Send(WorldProtocol.Event("jow", WorldEntryWire.LoadMap(selected.Location.MapId)), deadline.Token);
                             await output.Send(WorldProtocol.Event("irl", InventoryWire.Snapshot(selected.Currency, selected.Rewards.Items)), deadline.Token);
+                            await output.Send(WorldProtocol.Event("ith", InventoryWire.Balance(selected.Currency)), deadline.Token);
                             reply = WorldProtocol.Event("krg", WorldEntryWire.Statistics(selected));
                             break;
                         case "kjt" when selected is { ContextCreated: true }:

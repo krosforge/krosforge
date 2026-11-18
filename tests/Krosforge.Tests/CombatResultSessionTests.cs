@@ -61,7 +61,9 @@ public sealed partial class WorldSessionTests
                 var summary = ProtoObject.Read((await Event(world, "jwh", token)).Bytes(2), 4096);
                 Assert.Equal(15UL, summary.UInt64(4)); Assert.Equal(1UL, summary.UInt64(7));
                 AssertCombatInventory(await Event(world, "irl", token));
-                foreach (var type in new[] { "krg", "kjy", "kjp", "jow" }) await Event(world, type, token);
+                Assert.Equal(1UL, (await Event(world, "ith", token)).UInt64(2));
+                Assert.Equal(1UL, ProtoObject.Read((await Event(world, "krg", token)).Bytes(1), 4096).UInt64(6));
+                foreach (var type in new[] { "kjy", "kjp", "jow" }) await Event(world, type, token);
                 await LoadedMap(world, 100, token);
                 // A late duplicate acknowledgement cannot produce another result or payment.
                 await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, sequence), WorldProtocol.Number(3, 1)), token);
@@ -73,7 +75,9 @@ public sealed partial class WorldSessionTests
             await Send(fresh, "kta", WorldProtocol.Number(1, (ulong)id), token); await Event(fresh, "ksb", token);
             await Send(fresh, "kkc", [], token); await Event(fresh, "kjp", token); await Event(fresh, "jow", token);
             var itemId = AssertCombatInventory(await Event(fresh, "irl", token));
-            Assert.Equal(125UL, ProtoObject.Read((await Event(fresh, "krg", token)).Bytes(1), 4096).UInt64(11));
+            Assert.Equal(1UL, (await Event(fresh, "ith", token)).UInt64(2));
+            var restoredStatistics = ProtoObject.Read((await Event(fresh, "krg", token)).Bytes(1), 4096);
+            Assert.Equal(125UL, restoredStatistics.UInt64(11)); Assert.Equal(1UL, restoredStatistics.UInt64(6));
             await LoadedMap(fresh, 100, token);
             Assert.Equal(catalog.Initial, locations.LoadOrCreate(profile.Id, 290, id, catalog.Initial, catalog.Validate));
             Assert.Equal(1, new CombatOutcomeStore(root).Recover(profile.Id, 290, id));

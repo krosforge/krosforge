@@ -18,7 +18,8 @@ Static sources: original `GameAssembly.dll` SHA-256 `af866f65f0d08eebe9008ffda54
 | `kzu` | Bone 1, packed skins 3, packed indexed colors 5, packed scales 6. |
 | `jnv` | Int64 map at 3, int32 subarea at 5. |
 | `irl` | Empty auxiliary message at 3; int64 currency at 4; no item entries. |
-| `krg` | `kzv` snapshot at 1. Repeated `lae` stats at 1, next-level XP at 2, level-floor XP at 8, alignment at 10, current XP at 11. |
+| `ith` | Current int64 currency balance at 2. |
+| `krg` | `kzv` snapshot at 1. Repeated `lae` stats at 1, next-level XP at 2, currency at 6, level-floor XP at 8, alignment at 10, current XP at 11. |
 | `lae` | Stat identity at 2; usable variant `ldw` at 1; simple variant `lgt` at 3. |
 | `ldw`, `lgt` | Usable base at 4 and used at 7; simple value at 2. |
 
@@ -27,6 +28,8 @@ The current `Core.DataCenter.Metadata.Stat.StatId` enum has **int16** constants:
 For six RGB inputs 1–6, the expected indexed color stream is `818080088280801083808018848080208580802886808030`. This fixture is independent of the encoder's field lookup and packing code.
 
 The initial map and its cells are read from the separately installed, hash-pinned bundles. The test fixture contains no map geometry or native assets. Initial life/AP/MP are an explicit local configuration; XP thresholds come from the local catalog. None of these assertions alone establishes visual acceptance in the native client.
+
+Inventory and statistics must publish the same cumulative wallet. Native `esg.zht` (`0x1818b22b0`) reads `kzv` runtime offset `0x40` (field 6) and updates the inventory balance. Omitting it resets the client's balance to zero after `irl`/`ith`, including during a combat turn. `fef.bdmz` (`0x181b24a00`) consumes `ith` field 2 and releases inventory hooks. Tests assert the currency in both messages after a reward and after reconnect.
 
 ## Bestiary attribute dependencies
 

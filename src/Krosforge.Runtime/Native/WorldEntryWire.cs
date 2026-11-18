@@ -35,7 +35,7 @@ internal static class WorldEntryWire
             Simple(5, level), Usable(3, 0), Usable(11, 0), Simple(102, 0),
             Usable(1, attributes.ActionPoints), Usable(23, attributes.MovementPoints),
             Simple(29, attributes.Energy), Simple(48, attributes.Prospecting), Simple(109, attributes.Hunter),
-            N(11, attributes.Experience), N(8, attributes.ExperienceFloor), N(2, attributes.NextLevelExperience), B(10, []));
+            N(11, attributes.Experience), N(8, attributes.ExperienceFloor), N(2, attributes.NextLevelExperience), N(6, attributes.Currency), B(10, []));
         return B(1, stats);
     }
     internal static byte[] Information(WorldEntryService.Selection selection)

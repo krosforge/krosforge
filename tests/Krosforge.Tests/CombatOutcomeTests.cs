@@ -177,6 +177,6 @@ public sealed partial class WorldSessionTests
         Assert.Equal(1UL, ProtoObject.Read(rows[(ulong)a.Character.Id].Bytes(3), 4096).UInt64(2));
         var summary = ProtoObject.Read(Body(1, "jwh").Bytes(2), 4096);
         Assert.Equal(15UL, summary.UInt64(4)); Assert.Equal(0UL, summary.UInt64(5, false)); Assert.Equal(1UL, summary.UInt64(7));
-        Assert.Equal(1UL, Body(2, "irl").UInt64(4)); Assert.NotEmpty(Body(3, "krg").Bytes(1));
+        Assert.Equal(1UL, Body(2, "irl").UInt64(4)); Assert.Equal(1UL, Body(3, "ith").UInt64(2)); Assert.NotEmpty(Body(4, "krg").Bytes(1));
     }
 }

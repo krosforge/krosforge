@@ -17,6 +17,7 @@ internal static partial class CombatWire
             E("jwh", B(2, J(N(4, checked((int)result.Summary.DamageDealt)),
                 N(5, checked((int)result.Summary.DamageTaken)), N(7, result.Summary.EnemiesDefeated)))),
             E("irl", InventoryWire.Snapshot(result.Receipt.Balance, result.Receipt.State.Items)),
+            E("ith", InventoryWire.Balance(result.Receipt.Balance)),
             E("krg", WorldEntryWire.Statistics(result.Attributes, result.Character.Level))];
     }
 }

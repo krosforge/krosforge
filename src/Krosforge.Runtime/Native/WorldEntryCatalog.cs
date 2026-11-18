@@ -9,6 +9,7 @@ internal sealed record EntryAttributes(int Life, int ActionPoints, int MovementP
     public int Hunter { get; init; }
     public long Experience { get; init; }
     public long ExperienceFloor { get; init; }
+    public long Currency { get; init; }
 }
 internal sealed record EntryMap(long Id, int Subarea, IReadOnlySet<int> WalkableCells)
 {

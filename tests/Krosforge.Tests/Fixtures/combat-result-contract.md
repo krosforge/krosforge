@@ -11,6 +11,8 @@ This contract uses the current binary and metadata hashes documented in the prep
 | `lim` player | level 2; native entity information supplies breed and appearance |
 | `lia` prize | repeated groups 1, currency 2 (int64) |
 | `irl` inventory | empty ordinary inventory 3, current currency balance 4 |
+| `ith` balance | current currency balance 2; releases inventory hooks |
+| `krg` statistics | snapshot 1 (`kzv`), including cumulative currency 6 |
 | `jwh` statistics | identified player summary 2 (`jum`); participant details 1 are not supplied |
 | `jum` summary | shield 1, healing done 2, healing received 3, damage dealt 4, damage taken 5, blocked damage 6, enemies defeated 7 (int32) |
 

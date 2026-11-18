@@ -48,7 +48,7 @@ internal static partial class CombatWire
             Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp), Usable(3, 0, 0), Usable(11, 0, 0),
             Simple(29, attributes?.Energy ?? 10000), Simple(48, attributes?.Prospecting ?? 100), Simple(109, attributes?.Hunter ?? 0) };
         return B(1, J(entries.Concat(Attributes(player.Statistics)).Select(entry => B(1, entry))
-            .Concat([N(11, attributes?.Experience ?? 0), N(8, attributes?.ExperienceFloor ?? 0), N(2, nextExperience), B(10, [])]).ToArray()));
+            .Concat([N(11, attributes?.Experience ?? 0), N(8, attributes?.ExperienceFloor ?? 0), N(2, nextExperience), N(6, attributes?.Currency ?? 0), B(10, [])]).ToArray()));
     }
     private static byte[] Action(long source, int id, int variant, byte[] payload) => E("jsq", J(N(22, id), N(36, source), B(variant, payload)));
     private static byte[] Points(long actor, bool movement, int delta) => Action(actor, movement ? 129 : 102, 13, J(N(2, delta), N(3, actor)));

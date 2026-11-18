@@ -33,7 +33,7 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             get
             {
                 var band = owner.catalog.Experience.At(Rewards.Experience);
-                return owner.catalog.Attributes with { Experience = Rewards.Experience, ExperienceFloor = band.Floor, NextLevelExperience = band.Ceiling };
+                return owner.catalog.Attributes with { Experience = Rewards.Experience, ExperienceFloor = band.Floor, NextLevelExperience = band.Ceiling, Currency = Currency };
             }
         }
         internal CharacterRewards Rewards { get; set; } = new(0, []);

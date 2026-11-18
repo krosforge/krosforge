@@ -8,6 +8,7 @@ internal static class InventoryWire
     private static byte[] J(params byte[][] values) => WorldProtocol.Join(values);
     internal static byte[] Snapshot(long currency, IReadOnlyList<InventoryItem> items) =>
         J(items.Select(item => B(2, Item(item))).Concat([B(3, []), N(4, currency)]).ToArray());
+    internal static byte[] Balance(long currency) => N(2, currency);
     private static byte[] Item(InventoryItem item)
     {
         if (item.Id is <= 0 or > int.MaxValue || item.Template <= 0 || item.Quantity <= 0)
