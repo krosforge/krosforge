@@ -49,6 +49,8 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                 if (!Directory.Exists(target))
                     target = await ClientPreparation.PrepareAsync(installation.Path, dataRoot, new ProgressSink(value => job.Update("preparing", value.BytesCopied, value.TotalBytes)), job.Cancellation.Token);
                 ValidatePrepared(installation.Path, target);
+                if (!configured)
+                    await CharacterNavigation.ApplyAsync(installation.Path, target, job.Cancellation.Token);
                 job.Cancellation.Token.ThrowIfCancellationRequested();
                 host ??= new LocalSessionHost(diagnostic: new SessionDiagnostics(dataRoot).Write, characters: new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target)));
                 if (!configured)
@@ -120,7 +122,9 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
             SafePaths.CheckTree(Path.GetDirectoryName(path)!);
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("ErrorCopyInvalid");
             using var file = File.OpenRead(path);
-            if (Convert.ToHexStringLower(SHA256.HashData(file)) != hash) throw new IOException("ErrorCopyInvalid");
+            var actualHash = Convert.ToHexStringLower(SHA256.HashData(file));
+            if (actualHash != hash && (relative != "GameAssembly.dll" || actualHash != CharacterNavigation.PatchedHash))
+                throw new IOException("ErrorCopyInvalid");
         }
         var info = File.ReadAllLines(Path.Combine(target, "Dofus_Data", "app.info"));
         if (info.Length != 2 || info[0] != marker.Company || info[1] != marker.Product) throw new IOException("ErrorCopyInvalid");

@@ -44,6 +44,39 @@ public sealed partial class WorldSessionTests
         }
         finally { Directory.Delete(root, true); }
     }
+    [Fact]
+    public async Task CreationRosterSelectsTheNewCharacterWithoutChangingRegularListOrder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "creation-order-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var profiles = new ProfileStore(root); var profile = profiles.Create("Account");
+            var store = new CharacterStore(root);
+            await using var host = new LocalSessionHost(characters: new CharacterService(store, SyntheticCatalog()));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); var token = timeout.Token;
+            using var session = host.Register(profile, "pt", _ => { });
+            using var login = new TcpClient(); await Login(host, login, session.IssueTicket(), token);
+            using var world = await Enter(host, login, token);
+            var ids = new List<ulong>();
+            foreach (var name in new[] { "Older", "Newer" })
+            {
+                await Send(world, "kru", WorldProtocol.Bytes(1, WorldProtocol.Join(S(2, name), WorldProtocol.Number(4, 1))), token);
+                Assert.Equal(0UL, (await Event(world, "ksn", token)).UInt64(1));
+                var roster = (await Event(world, "ksv", token)).Repeated(2).Select(f => ProtoObject.Read(f.Bytes, 128)).ToArray();
+                var first = roster[0];
+                Assert.Equal(name, ProtoObject.Read(first.Bytes(4), 128).Text(6));
+                Assert.DoesNotContain(first.UInt64(3), ids);
+                Assert.Equal(ids.Count + 1, roster.Length);
+                Assert.Equal(ids, roster.Skip(1).Select(c => c.UInt64(3)));
+                ids.Add(first.UInt64(3));
+            }
+            await Send(world, "ksu", [], token);
+            Assert.Equal(ids, (await Event(world, "ksv", token)).Repeated(2).Select(f => ProtoObject.Read(f.Bytes, 128).UInt64(3)));
+            Assert.Equal(ids.Select(id => (long)id), new CharacterStore(root).List(profile.Id, 290).Select(c => c.Id));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

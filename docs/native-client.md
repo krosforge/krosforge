@@ -67,3 +67,22 @@ Each storage operation owns its SQLite connection. Immediate write transactions 
 Creation reads the hash-pinned breed, head and body bundles locally from the shared client copy. The bounded managed reader supports the reference UnityFS index, LZ4/LZMA blocks, serialized v22 metadata and managed-reference registry v2. Nothing is extracted to disk or distributed with the application. Normal creation options must match the chosen breed/gender, be available at creation and not be marked payable. Omitted options use the first available catalog order/ID; absent colors use that breed/gender’s defaults. Character presentation starts at level one. Authentication includes each owned character’s name, connection-specific class ordinal, gender, level and an epoch last-access marker. The realm status remains online regardless of character count; the native server card derives its count from these summaries. World-entry requests remain rejected.
 
 Automated catalog verification can be enabled with `KROSFORGE_TEST_CLIENT` pointing to a separate reference installation. That test is skipped in CI, which does not receive game assets. Automated TCP and SQLite tests use synthetic appearance data. Native screen acceptance, including all five languages and the behavior after creation, must be recorded separately in the pull request.
+
+## Character navigation compatibility
+
+The creation response places the newly committed character first because the native creation consumer selects the first roster entry. Ordinary list requests keep their stable order. Creation success and world selection remain distinct operations; refusing selection never rolls back character creation.
+
+In reference build `3.7.14.18`, the rejection handler clears the cached roster, the back action omits it from the display event, and automatic-selection paths interfere with returning to the list. The managed copy receives four bounded compatibility changes before the first native process starts:
+
+| Consumer | Native RVA / file offset | Change |
+| --- | --- | --- |
+| Selection rejection tail | `0x184534b` / `25442635` | Retain the failure notification and cached roster; clear only the pending selected ID. |
+| Character-list display | `0x1f04fc7` / `32519623` | A forced return displays the roster; normal creation retains its automatic selection path. |
+| Roster after server handoff | `0x183ff93` / `25421203` | Skip the remembered-character candidate; show the roster for manual selection. The separate newly-created-character selection path is retained. |
+| Back from creation | `0x176f7b0`, `0x176f80b` / `24567216`, `24567307` | Preserve the cached roster in a saved register and pass it to the display event instead of null, allowing the first-ever list screen to initialize. |
+
+These locations were derived from the pinned native consumers and exercised in an isolated Portuguese client. They are compatibility instructions, not game content. Server handoff always opens the roster for manual selection. The first change preserves the original failure dialog; no world-entry success is fabricated. After dismissing a refusal during creation, the back arrow returns to the roster in the same window.
+
+`CharacterNavigation` accepts only the complete original assembly hash or the complete expected patched hash (`e51305f154af33fe0fb71584f105847b9e90ff88f074232eace4323d3f2ae7d4`). It checks each original instruction range and the resulting digest, writes a separate temporary file, flushes it, and atomically promotes it. Cancellation or promotion failure leaves the previous assembly intact. A terminated process may leave an unreferenced temporary file; it is never treated as a valid prepared assembly. A retry derives the change from the unchanged original. Unknown or partially modified assemblies fail validation. Additional profiles reuse the verified shared assembly.
+
+Only the managed copy changes. No native binaries or extracted assets are shipped. Existing prepared copies are updated without copying the whole installation again. Older launchers do not recognize the patched digest; to use an older launcher, close all native windows and prepare a fresh managed copy while preserving the database. Native acceptance and Windows locked-file recovery remain separate from the synthetic Linux tests.
