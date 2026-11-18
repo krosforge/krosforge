@@ -29,7 +29,7 @@ internal sealed partial class WorldEntryService
             var monster = fight.Encounter.MonsterFor(position.ActorId);
             return new(position.ActorId, position.Team, false, position.Cell, monster.Life, monster.Life,
                 monster.ActionPoints, monster.ActionPoints, monster.MovementPoints, monster.MovementPoints,
-                monster.Statistics, spells.Monster(monster.Spells));
+                monster.Statistics, spells.Monster(monster.Spells, monster.SpellGrades.Count == 0 ? null : monster.SpellGrades));
         }
         fight.Turns = new(fight.Encounter.Board, fight.Preparation.Fighters.Select(position => position.Controlled
             ? new CombatFighter(position.ActorId, position.Team, true, position.Cell, attributes.Life, attributes.Life,

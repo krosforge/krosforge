@@ -9,6 +9,7 @@ internal sealed record CombatMonster(int Definition, int Grade, int Level, int L
     internal long Experience { get; init; }
     internal CombatStatistics Statistics { get; init; } = CombatStatistics.Empty;
     internal ImmutableArray<int> Spells { get; init; } = [];
+    internal ImmutableDictionary<int, int> SpellGrades { get; init; } = ImmutableDictionary<int, int>.Empty;
 }
 internal sealed record CombatReward(long Currency, bool RestoreFullLife);
 internal sealed record CombatOpponent(long Actor, int Cell, CombatMonster Monster);
@@ -50,13 +51,16 @@ internal sealed class CombatCatalog
         {
             var monster = monsters[id];
             var grade = Rows(monster, "grades").Single(row => Number(row, "grade") == gradeId);
+            var spellIds = ((object[])((Dictionary<string, object>)monster["spells"]).Single().Value)
+                .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToArray();
+            var spellGrades = ((object[])((Dictionary<string, object>)monster["spellGrades"]).Single().Value).Cast<string>().ToArray();
             return new(id, gradeId, Number(grade, "level"), Number(grade, "lifePoints"),
                 Number(grade, "actionPoints"), Number(grade, "movementPoints"), ParseLook((string)monster["look"]))
             {
                 Experience = Convert.ToInt64(grade["xp"], CultureInfo.InvariantCulture),
                 Statistics = CombatSpellCatalog.Statistics(grade),
-                Spells = ((object[])((Dictionary<string, object>)monster["spells"]).Single().Value)
-                    .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToImmutableArray()
+                Spells = spellIds.ToImmutableArray(),
+                SpellGrades = ReadSpellGrades(spellIds, spellGrades, Number(grade, "level"))
             };
         }
         Encounters = config.Encounters.Select(definition =>
@@ -92,6 +96,25 @@ internal sealed class CombatCatalog
         }
     }
     private static int Number(Dictionary<string, object> row, string key) => Convert.ToInt32(row[key], CultureInfo.InvariantCulture);
+    internal static ImmutableDictionary<int, int> ReadSpellGrades(int[] spells, string[] definitions, int level)
+    {
+        if (spells.Length != definitions.Length || spells.Distinct().Count() != spells.Length || level <= 0)
+            throw new InvalidDataException("Invalid monster spell grades.");
+        return spells.Select((spell, index) =>
+        {
+            var choices = definitions[index].Split(';').Select(pair =>
+            {
+                var parts = pair.Split(',');
+                if (parts.Length != 2 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var grade) ||
+                    !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var monsterLevel) || grade <= 0 || monsterLevel <= 0)
+                    throw new InvalidDataException("Unsupported monster spell grade mapping.");
+                return (Grade: grade, Level: monsterLevel);
+            }).ToArray();
+            if (choices.Select(choice => choice.Level).Distinct().Count() != choices.Length || choices.Count(choice => choice.Level == level) != 1)
+                throw new InvalidDataException("Monster spell grade missing or ambiguous.");
+            return new KeyValuePair<int, int>(spell, choices.Single(choice => choice.Level == level).Grade);
+        }).ToImmutableDictionary();
+    }
     private static IEnumerable<Dictionary<string, object>> Rows(Dictionary<string, object> row, string key) =>
         ((object[])((Dictionary<string, object>)row[key]).Single().Value).Cast<Dictionary<string, object>>();
     private static EntityLookWire ParseLook(string value)

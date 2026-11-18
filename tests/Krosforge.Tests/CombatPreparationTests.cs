@@ -57,6 +57,9 @@ public sealed class CombatPreparationTests
         Assert.Equal(15, e.Monster.Life); Assert.Equal(2, e.Monster.ActionPoints); Assert.Equal(3, e.Monster.MovementPoints);
         Assert.Equal(3253, e.Monster.Look.BoneId);
         Assert.Equal(50, e.Monster.Experience);
+        Assert.Equal(4, e.Monster.SpellGrades[5866]);
+        var nativeSpell = Assert.Single(new CombatSpellCatalog(root!).Monster(e.Monster.Spells, e.Monster.SpellGrades));
+        Assert.Equal(CombatElement.Air, nativeSpell.Damage.Element); Assert.Equal(4, nativeSpell.Grade);
         Assert.Equal(2, world.Experience.At(110).Level);
         var rewards = new CombatRewardCalculator(root!, new("Local", 2.5m));
         Assert.Equal(125, rewards.Calculate(e, 1, 0, true).Experience);

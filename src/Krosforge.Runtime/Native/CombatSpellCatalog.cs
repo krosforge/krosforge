@@ -13,7 +13,7 @@ internal sealed class CombatSpellCatalog
     internal CombatTiming Timing { get; } = new();
     private readonly ImmutableArray<CombatSpell> common;
     private readonly Dictionary<int, ImmutableArray<CombatSpell>> players;
-    private readonly Dictionary<int, ImmutableArray<CombatSpell>> monsters;
+    private readonly Dictionary<(int Id, int Grade), CombatSpell> monsters;
     internal CombatSpellCatalog(string root)
     {
         using var resource = typeof(CombatSpellCatalog).Assembly.GetManifestResourceStream("Krosforge.Runtime.Native.combat-spells.json")
@@ -27,7 +27,8 @@ internal sealed class CombatSpellCatalog
         var wanted = config.Common.Concat(config.Players.SelectMany(p => p.Spells)).Concat(config.Monsters).ToHashSet();
         var spells = CreationDataReader.Read(Path.Combine(root, config.Spells.Path), config.Spells.Sha256,
             maxOutput: 8388608, selectedKeys: wanted.Select(id => (long)id).ToHashSet()).ToDictionary(r => N(r, "id"));
-        var levelIds = spells.Values.Select(r => Convert.ToInt64(Array(r, "spellLevels")[0], CultureInfo.InvariantCulture)).ToHashSet();
+        var levelIds = spells.Values.SelectMany(r => config.Monsters.Contains(N(r, "id")) ? Array(r, "spellLevels") : Array(r, "spellLevels").Take(1))
+            .Select(value => Convert.ToInt64(value, CultureInfo.InvariantCulture)).ToHashSet();
         var levels = CreationDataReader.Read(Path.Combine(root, config.Levels.Path), config.Levels.Sha256,
             maxOutput: 33554432, selectedKeys: levelIds, maxInput: 2097152).ToDictionary(r => N(r, "id"));
         CombatSpell Read(int id)
@@ -45,16 +46,24 @@ internal sealed class CombatSpellCatalog
             if (p.Spells.Any(id => !native.Contains(id))) throw new InvalidDataException("Spell does not belong to the configured class.");
             return p.Spells.Select(Read).ToImmutableArray();
         });
-        monsters = config.Monsters.ToDictionary(id => id, id => ImmutableArray.Create(Read(id)));
+        monsters = config.Monsters.SelectMany(id => Array(spells[id], "spellLevels").Select(value =>
+        {
+            var row = levels[Convert.ToInt32(value, CultureInfo.InvariantCulture)];
+            if (N(row, "spellId") != id) throw new InvalidDataException("Monster spell identity mismatch.");
+            return Parse(row);
+        })).ToDictionary(spell => (spell.Id, spell.Grade));
     }
     internal CombatSpellCatalog(IEnumerable<CombatSpell> common, IReadOnlyDictionary<int, ImmutableArray<CombatSpell>>? players = null,
         IReadOnlyDictionary<int, ImmutableArray<CombatSpell>>? monsters = null)
     {
-        this.common = common.ToImmutableArray(); this.players = players?.ToDictionary() ?? []; this.monsters = monsters?.ToDictionary() ?? [];
+        this.common = common.ToImmutableArray(); this.players = players?.ToDictionary() ?? [];
+        this.monsters = monsters?.Values.SelectMany(book => book).ToDictionary(spell => (spell.Id, spell.Grade)) ?? [];
     }
     internal ImmutableArray<CombatSpell> Player(int breed) => common.AddRange(players.GetValueOrDefault(breed, []));
-    internal ImmutableArray<CombatSpell> Monster(IEnumerable<int> spells) => spells.SelectMany(id =>
-        monsters.TryGetValue(id, out var book) ? book : throw new InvalidDataException("Unsupported monster spell.")).ToImmutableArray();
+    internal ImmutableArray<CombatSpell> Monster(IEnumerable<int> spells, IReadOnlyDictionary<int, int>? grades = null) => spells.Select(id =>
+        monsters.TryGetValue((id, grades is null ? 1 : grades.TryGetValue(id, out var grade) ? grade :
+            throw new InvalidDataException("Monster spell grade missing.")), out var spell) ? spell :
+            throw new InvalidDataException("Unsupported monster spell grade.")).ToImmutableArray();
     internal static CombatSpell Parse(Dictionary<string, object> row)
     {
         var flags = N(row, "m_flags");
