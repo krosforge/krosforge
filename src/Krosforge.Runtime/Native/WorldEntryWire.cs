@@ -41,8 +41,9 @@ internal static class WorldEntryWire
     {
         return Information(selection.Map, [new(selection.Character, selection.Account, selection.Location)]);
     }
-    internal static byte[] Information(EntryMap map, IEnumerable<WorldActor> actors) =>
-        J(actors.Select(actor => B(3, Actor(actor))).Concat([N(10, map.Id), N(12, map.Subarea)]).ToArray());
+    internal static byte[] Information(EntryMap map, IEnumerable<WorldActor> actors, IEnumerable<CombatEncounter>? encounters = null) =>
+        J(actors.Select(actor => B(3, Actor(actor))).Concat((encounters ?? []).Select(e => B(3, CombatWire.Group(e))))
+            .Concat([N(10, map.Id), N(12, map.Subarea)]).ToArray());
     internal static byte[] Actor(WorldActor value)
     {
         var character = value.Character;
@@ -54,13 +55,13 @@ internal static class WorldEntryWire
     }
     internal static byte[][] Events(WorldNotice notice) => notice switch
     {
-        MapSnapshot snapshot => [WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors)), WorldProtocol.Event("jnv", Reference(snapshot.Map))],
+        MapSnapshot snapshot => [WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors, snapshot.Encounters)), WorldProtocol.Event("jnv", Reference(snapshot.Map))],
         ActorAppeared appeared => [WorldProtocol.Event("jns", B(1, Actor(appeared.Actor)))],
         ActorDeparted departed => [WorldProtocol.Event("kjz", N(1, departed.Id))],
         ActorMoved moved => [WorldProtocol.Event("jnz", WorldMovementWire.Movement(moved.Id, moved.Cells))],
         ActorCorrected corrected => [WorldProtocol.Event("joz", WorldMovementWire.Correction(corrected.Id, corrected.Cell))],
         MovementReleased => [WorldProtocol.Event("jpk", [])],
         MapLoading loading => [WorldProtocol.Event("jow", LoadMap(loading.Map))],
-        _ => throw new ArgumentOutOfRangeException(nameof(notice))
+        _ => CombatWire.Events(notice)
     };
 }

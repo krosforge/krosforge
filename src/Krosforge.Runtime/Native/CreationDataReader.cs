@@ -30,13 +30,14 @@ internal static class CreationDataReader
     private sealed record Node(int Level, int Flags, string Type, string Name, int Size, int Meta);
     private sealed record Type(int Class, Node[] Nodes);
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    internal static Dictionary<string, object>[] Read(string path, string hash, bool includeKeys = false)
+    internal static Dictionary<string, object>[] Read(string path, string hash, bool includeKeys = false, int maxOutput = 4194304, IReadOnlySet<long>? selectedKeys = null)
     {
         SafePaths.CheckTree(Path.GetDirectoryName(path)!);
         if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 || new FileInfo(path).Length > 1048576) throw new InvalidDataException("Invalid catalog file.");
         var raw = File.ReadAllBytes(path);
         if (Convert.ToHexStringLower(SHA256.HashData(raw)) != hash) throw new InvalidDataException("Unsupported client catalog.");
-        return Serialized(Unpack(raw), includeKeys: includeKeys);
+        if (maxOutput is < 1 or > 67108864) throw new ArgumentOutOfRangeException(nameof(maxOutput));
+        return Serialized(Unpack(raw, maxOutput), includeKeys: includeKeys, selectedKeys: selectedKeys);
     }
     internal static Dictionary<string, object>[] ReadMaps(string path, string hash, params int[] mapIds)
     {
@@ -67,7 +68,7 @@ internal static class CreationDataReader
             if (block.Mode is 2 or 3) bytes = Lz4(bytes, block.Size);
             else if (block.Mode == 1)
             {
-                if (bytes.Length < 5 || block.Size is < 0 or > 4194304 || BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(1, 4)) > 16777216) throw new InvalidDataException("Invalid LZMA properties.");
+                if (bytes.Length < 5 || block.Size < 0 || block.Size > maxOutput || BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(1, 4)) > 16777216) throw new InvalidDataException("Invalid LZMA properties.");
                 using var input = new MemoryStream(bytes, 5, bytes.Length - 5, false);
                 using var decoder = SharpCompress.Compressors.LZMA.LzmaStream.Create(bytes[..5], input, bytes.Length - 5, block.Size);
                 bytes = new byte[block.Size]; decoder.ReadExactly(bytes);
@@ -97,7 +98,7 @@ internal static class CreationDataReader
         }
         if (dst != size) throw new InvalidDataException("LZ4 size mismatch."); return output;
     }
-    private static Dictionary<string, object>[] Serialized(byte[] bytes, IReadOnlySet<int>? maps = null, bool includeKeys = false)
+    private static Dictionary<string, object>[] Serialized(byte[] bytes, IReadOnlySet<int>? maps = null, bool includeKeys = false, IReadOnlySet<long>? selectedKeys = null)
     {
         var h = new Reader(bytes); h.Big32(); h.Big32();
         if (h.Big32() != 22) throw new InvalidDataException("Unsupported serialized file.");
@@ -180,16 +181,27 @@ internal static class CreationDataReader
         r.I32(); r.I64(); r.U8(); r.Align(); r.I32(); r.I64(); r.Text();
         count = r.Count(); var keys = Enumerable.Range(0, count).Select(_ => r.I64()).ToArray(); count = r.Count(); var ids = Enumerable.Range(0, count).Select(_ => r.I64()).ToArray();
         if (keys.Length != ids.Length || keys.Distinct().Count() != keys.Length) throw new InvalidDataException("Invalid dictionary.");
+        if (selectedKeys is not null && !selectedKeys.All(key => keys.Contains(key))) throw new InvalidDataException("Missing catalog key.");
+        var selected = Enumerable.Range(0, keys.Length).Where(i => selectedKeys is null || selectedKeys.Contains(keys[i])).ToArray();
+        var wanted = selected.Select(i => ids[i]).ToHashSet();
         r.Align(); if (r.I32() != 2) throw new InvalidDataException("Unsupported references.");
         var refs = new Dictionary<long, Dictionary<string, object>>(); count = r.Count();
+        var seen = new HashSet<long>();
         for (var i = 0; i < count; i++)
         {
             var id = r.I64(); var nodes = schemas[(r.Text(), r.Text(), r.Text())]; var row = new Dictionary<string, object>();
-            for (var j = 0; j < nodes.Length; j++) if (nodes[j].Level == 1 && nodes[j].Type != "ManagedReferencesRegistry") row.Add(nodes[j].Name, Value(nodes, j));
-            refs.Add(id, row);
+            if (!seen.Add(id)) throw new InvalidDataException("Duplicate catalog reference.");
+            var keep = wanted.Contains(id);
+            for (var j = 0; j < nodes.Length; j++) if (nodes[j].Level == 1 && nodes[j].Type != "ManagedReferencesRegistry")
+            {
+                var value = Value(nodes, j);
+                if (keep) row.Add(nodes[j].Name, value);
+            }
+            if (keep) refs.Add(id, row);
         }
         if (r.Position != obj.Length) throw new InvalidDataException("Unconsumed catalog data.");
-        if (includeKeys) for (var i = 0; i < ids.Length; i++) refs[ids[i]].Add("$key", keys[i]);
-        return ids.Select(id => refs[id]).ToArray();
+        if (ids.Any(id => !seen.Contains(id))) throw new InvalidDataException("Unresolved catalog reference.");
+        if (includeKeys) foreach (var i in selected) refs[ids[i]].Add("$key", keys[i]);
+        return selected.Select(i => refs[ids[i]]).ToArray();
     }
 }

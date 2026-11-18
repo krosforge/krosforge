@@ -1,0 +1,21 @@
+{
+  "Build": "3.7.14.18",
+  "Monsters": {
+    "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_monstersdataroot.asset.bundle",
+    "Sha256": "02a44dcd50e87333adf5218c5545901c819e1de52798139f67d8d6599dd8db00"
+  },
+  "Encounters": [
+    {
+      "Map": 153878787,
+      "GroupId": -30001,
+      "GroupCell": 363,
+      "Direction": 3,
+      "AttackDistance": 2,
+      "FightType": 4,
+      "PlayerCell": 338,
+      "MonsterCell": 455,
+      "MonsterId": 3270,
+      "Grade": 1
+    }
+  ]
+}
