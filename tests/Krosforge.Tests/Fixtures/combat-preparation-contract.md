@@ -31,3 +31,7 @@ The `ldg` map variant has integer fields 1, 2 and 3. The current projection reta
 Independent native data checks use the monster bundle hash `02a44dcd50e87333adf5218c5545901c819e1de52798139f67d8d6599dd8db00` and the geometry hash in the surface contract. Monster 3270, grade 1, has level 1, life 15, AP 2, MP 3 and look bone 3253. The initial map's blue placements are `338,339,340,365,366,367,393,394,395,421`; red placements are `455,456,457,469,483,484,498,499,511,526`. Tests assert these independently read values against runtime loading. Spawn cell 363, initial placements and encounter membership are reconstructed local policy.
 
 TCP coverage checks negative identities as signed int64 two's-complement varints, concrete participant variants, the two distinct placement sets, context ordering and restoration of the original location after forfeit. It establishes server/wire behavior, not native rendering or complete combat rules.
+
+## Neutral calendar presentation
+
+The current `lov` message carries the calendar identity in field 3. The native monster tooltip reads `fka.bfaa()` through `fbm.bcki`; without the calendar event it throws before displaying the group details. The installed calendar bundle SHA-256 is `2791d7f01a597706eab8783c74b9d78970ea8d3e77be2a161877d238a5b48713`. An independent read found record 10 to be the lowest ID with no bonus entries. Choosing an empty bonus list is local policy; record identity is read from the installation. The calendar event precedes the map actors.

@@ -17,5 +17,9 @@
       "MonsterId": 3270,
       "Grade": 1
     }
-  ]
+  ],
+  "Calendar": {
+    "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_almanaxcalendarsdataroot.asset.bundle",
+    "Sha256": "2791d7f01a597706eab8783c74b9d78970ea8d3e77be2a161877d238a5b48713"
+  }
 }

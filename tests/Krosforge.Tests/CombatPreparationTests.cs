@@ -45,6 +45,10 @@ public sealed class CombatPreparationTests
         var root = Environment.GetEnvironmentVariable("KROSFORGE_TEST_CLIENT");
         Assert.SkipWhen(root is null, "Requires the separately installed reference client.");
         var world = new WorldEntryCatalog(root!); var catalog = new CombatCatalog(root!, world);
+        Assert.Equal(10, catalog.NeutralCalendar);
+        var events = WorldEntryWire.Events(new MapSnapshot(world.Map(153878787), [], catalog.Encounters, catalog.NeutralCalendar));
+        // Independent envelope: event(3), Any(1), type URL(1), payload(2), calendar id(3).
+        Assert.Equal(Convert.FromHexString("1a1b0a190a13747970652e616e6b616d612e636f6d2f6c6f761202180a"), events[0]);
         var e = Assert.Single(catalog.Encounters);
         Assert.Equal(153878787, e.Map); Assert.Equal(363, e.GroupCell);
         Assert.Equal(new[] { 338,339,340,365,366,367,393,394,395,421 }, e.Board.Placements[0].Order());

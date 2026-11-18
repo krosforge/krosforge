@@ -2,6 +2,8 @@
 
 The runtime reads monster appearance, grade, level and basic attributes from the player's hash-pinned installation. `Native/combat-encounters.json` supplies encounter identities, source map, spawn, approach distance and initial placement choices. These are explicit local encounter rules, not recovered official spawn scripts. No extracted models, names, dialogue, monster records or client binaries are distributed.
 
+The runtime also selects the lowest installed calendar record with an empty bonus list. It initializes the native monster tooltip with a neutral local calendar; it does not reproduce the official seasonal schedule.
+
 Combat terrain comes from the installed map geometry. The low nibble of `linkedZone` identifies the combat zone; exploration continues to use the high nibble. Native red and blue cell flags define the two placement sets. Initial positions must belong to their respective teams and cannot overlap. The catalog rejects unknown creature grades, unsupported appearance formats and invalid placement instead of silently substituting content.
 
 ## Encounter and preparation lifecycle

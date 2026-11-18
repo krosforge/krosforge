@@ -13,14 +13,21 @@ internal sealed class CombatCatalog
     private sealed record Source(string Path, string Sha256);
     private sealed record Definition(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
         int FightType, int PlayerCell, int MonsterCell, int MonsterId, int Grade);
-    private sealed record Configuration(string Build, Source Monsters, Definition[] Encounters);
+    private sealed record Configuration(string Build, Source Monsters, Source Calendar, Definition[] Encounters);
     internal IReadOnlyList<CombatEncounter> Encounters { get; }
+    internal int? NeutralCalendar { get; }
     internal CombatCatalog(string root, WorldEntryCatalog world)
     {
         using var resource = typeof(CombatCatalog).Assembly.GetManifestResourceStream("Krosforge.Runtime.Native.combat-encounters.json")
             ?? throw new InvalidDataException("Combat configuration missing.");
         var config = JsonSerializer.Deserialize<Configuration>(resource) ?? throw new InvalidDataException("Invalid combat configuration.");
         if (config.Build != ClientInstallation.SupportedBuild) throw new InvalidDataException("Combat build mismatch.");
+        // The native monster tooltip reads calendar bonuses even when the local world has none.
+        // Select an installed record with no bonuses instead of inventing a calendar identity.
+        NeutralCalendar = CreationDataReader.Read(Path.Combine(root, config.Calendar.Path), config.Calendar.Sha256)
+            .Where(row => ((object[])((Dictionary<string, object>)row["bonusesIds"]).Single().Value).Length == 0)
+            .Select(row => Number(row, "id")).Where(id => id > 0).Order().Cast<int?>().FirstOrDefault()
+            ?? throw new InvalidDataException("No neutral calendar presentation is available.");
         var monsters = CreationDataReader.Read(Path.Combine(root, config.Monsters.Path), config.Monsters.Sha256, maxOutput: 16777216,
                 selectedKeys: config.Encounters.Select(e => (long)e.MonsterId).ToHashSet())
             .ToDictionary(row => Number(row, "id"));

@@ -55,7 +55,7 @@ internal static class WorldEntryWire
     }
     internal static byte[][] Events(WorldNotice notice) => notice switch
     {
-        MapSnapshot snapshot => [WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors, snapshot.Encounters)), WorldProtocol.Event("jnv", Reference(snapshot.Map))],
+        MapSnapshot snapshot => [.. snapshot.NeutralCalendar is { } calendar ? new[] { WorldProtocol.Event("lov", N(3, calendar)) } : Array.Empty<byte[]>(), WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors, snapshot.Encounters)), WorldProtocol.Event("jnv", Reference(snapshot.Map))],
         ActorAppeared appeared => [WorldProtocol.Event("jns", B(1, Actor(appeared.Actor)))],
         ActorDeparted departed => [WorldProtocol.Event("kjz", N(1, departed.Id))],
         ActorMoved moved => [WorldProtocol.Event("jnz", WorldMovementWire.Movement(moved.Id, moved.Cells))],
