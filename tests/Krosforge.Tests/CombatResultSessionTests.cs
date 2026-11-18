@@ -30,7 +30,7 @@ public sealed partial class WorldSessionTests
             await Send(world, "hms", WorldProtocol.Number(2, unchecked((ulong)-30001L)), token);
             foreach (var type in new[] { "kjz", "kjy", "kjp", "jxi", "jow" }) await Event(world, type, token);
             await Send(world, "kjt", WorldProtocol.Number(1, 100), token);
-            foreach (var type in new[] { "jnj", "jnv", "jww", "jwj", "jwj", "jxk", "juf" }) await Event(world, type, token);
+            foreach (var type in new[] { "jnj", "jnv", "jww", "jwj", "jwj", "jxk", "juf", "jxh" }) await Event(world, type, token);
             await Send(world, "jxj", [8, 1], token);
             foreach (var type in new[] { "jxr", "jvu", "krg", "jvi", "jvj" }) await Event(world, type, token);
             await Send(world, "jsr", Convert.FromHexString("0801108001"), token);
