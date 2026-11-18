@@ -8,11 +8,16 @@ namespace Krosforge.Runtime.Native;
 internal sealed class CombatRewardCalculator
 {
     private sealed record Source(string Path, string Sha256, Dictionary<int, string> Formulas);
-    private sealed record Configuration(string Build, Source Source, GroupExperienceRules Group, PlayerExperienceRules Player);
+    private sealed record Configuration(string Build, Source Source, GroupExperienceRules Group, PlayerExperienceRules Player,
+        ProspectingRules Prospecting, LootSources Loot);
     private readonly GroupExperienceRules group;
     private readonly PlayerExperienceRules player;
+    private readonly ProspectingRules? prospecting;
+    private readonly CombatLootCatalog? loot;
+    private readonly Func<double> random = Random.Shared.NextDouble;
+    private readonly Func<int, int, int> dice = (min, max) => Random.Shared.Next(min, checked(max + 1));
     private ServerSettings settings;
-    internal CombatRewardCalculator(string root, ServerSettings settings)
+    internal CombatRewardCalculator(string root, ServerSettings settings, IEnumerable<int>? monsters = null)
     {
         using var resource = typeof(CombatRewardCalculator).Assembly.GetManifestResourceStream("Krosforge.Runtime.Native.combat-rewards.json")
             ?? throw new InvalidDataException("Reward configuration missing.");
@@ -26,17 +31,28 @@ internal sealed class CombatRewardCalculator
             if (Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes((string)row["formula"]))) != hash)
                 throw new InvalidDataException("Unsupported reward formula.");
         }
-        group = config.Group; player = config.Player; this.settings = settings;
+        group = config.Group; player = config.Player; prospecting = config.Prospecting; this.settings = settings;
+        if (monsters is not null) loot = new CombatLootCatalog(root, config.Loot, monsters);
     }
-    internal CombatRewardCalculator(GroupExperienceRules group, PlayerExperienceRules player, ServerSettings settings)
-    { this.group = group; this.player = player; this.settings = settings; }
+    internal CombatRewardCalculator(GroupExperienceRules group, PlayerExperienceRules player, ServerSettings settings,
+        CombatLootCatalog? loot = null, ProspectingRules? prospecting = null, Func<double>? random = null, Func<int, int, int>? dice = null)
+    {
+        this.group = group; this.player = player; this.settings = settings; this.loot = loot; this.prospecting = prospecting;
+        if (random is not null) this.random = random;
+        if (dice is not null) this.dice = dice;
+    }
     internal void Configure(ServerSettings settings) => this.settings = settings;
-    internal CombatAward Calculate(CombatEncounter encounter, int level, int wisdom, bool victory)
+    internal CombatAward Calculate(CombatEncounter encounter, int level, int wisdom, bool victory, int prospectingScore = 100,
+        int hunter = 0, IReadOnlyList<InventoryItem>? inventory = null)
     {
         if (!victory) return new(0, []);
         ExperienceMonster[] monsters = [new(encounter.Monster.Level, encounter.Monster.Experience)];
         var shared = CombatExperience.Group([new(level)], monsters, true, 1, group);
         var earned = CombatExperience.Individual(shared, monsters, level, wisdom, level, 1, 1, 1, player);
-        return new(CombatExperience.Multiply(earned, settings.ExperienceMultiplier), []);
+        var items = loot is null ? [] : loot.Roll(encounter.Monster.Definition, encounter.Monster.Grade,
+            new(level, encounter.Map, loot.ServerType, loot.Season, hunter, new HashSet<int>(), new HashSet<int>(), new HashSet<int>(), inventory ?? []),
+            CombatDrops.ProspectingCoefficient(checked(prospectingScore - 100), prospecting ?? throw new InvalidOperationException("Prospecting formula missing.")),
+            settings.DropMultiplier, random, dice);
+        return new(CombatExperience.Multiply(earned, settings.ExperienceMultiplier), items);
     }
 }

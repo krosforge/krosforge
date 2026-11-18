@@ -27,6 +27,7 @@ internal sealed partial class WorldEntryService
         internal long StartedAt { get; set; }
         internal Guid? DurableId { get; set; }
         internal CombatReceipt? Receipt { get; set; }
+        internal CombatAward? Award { get; set; }
     }
     private readonly Dictionary<long, Selection> claimedGroups = [];
     private long lastFight;

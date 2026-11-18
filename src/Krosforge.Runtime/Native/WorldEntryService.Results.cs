@@ -15,10 +15,12 @@ internal sealed partial class WorldEntryService
         var won = turns is { Finished: true, WinningTeam: 0 };
         var status = won ? "victory" : forfeit && turns is not { Finished: true } ? "abandoned" : "defeat";
         var duration = fight.Started ? Math.Max(0, (long)clock.GetElapsedTime(fight.StartedAt, clock.GetTimestamp()).TotalMilliseconds) : 0;
+        fight.Award ??= rewards?.Calculate(fight.Encounter, selection.Character.Level, 0, won,
+            selection.Attributes.Prospecting, selection.Attributes.Hunter, selection.Rewards.Items) ?? new(0, []);
         fight.Receipt = outcomes!.Complete(selection.Profile, ServerPresentation.RealmId, selection.Character.Id,
             fight.DurableId ?? throw new InvalidOperationException("Combat has no durable identity."), status,
             won ? fight.Encounter.Reward.Currency : 0, duration,
-            award: rewards?.Calculate(fight.Encounter, selection.Character.Level, 0, won));
+            award: fight.Award);
         selection.Currency = fight.Receipt.Balance;
         selection.Rewards = fight.Receipt.State;
         selection.Character = selection.Character with { Level = catalog.Experience.At(selection.Rewards.Experience).Level };

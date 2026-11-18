@@ -6,6 +6,7 @@ internal sealed record EntryAttributes(int Life, int ActionPoints, int MovementP
 {
     public int Energy { get; init; } = 10000;
     public int Prospecting { get; init; } = 100;
+    public int Hunter { get; init; }
     public long Experience { get; init; }
     public long ExperienceFloor { get; init; }
 }

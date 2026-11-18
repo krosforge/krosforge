@@ -46,7 +46,7 @@ internal static partial class CombatWire
             Simple(96, 0), Simple(97, player.Life - player.MaximumLife), Simple(102, 0), Simple(5, level),
             Usable(1, player.MaximumAp, player.Ap, player.MaximumAp - player.Ap),
             Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp), Usable(3, 0, 0), Usable(11, 0, 0),
-            Simple(29, attributes?.Energy ?? 10000), Simple(48, attributes?.Prospecting ?? 100) };
+            Simple(29, attributes?.Energy ?? 10000), Simple(48, attributes?.Prospecting ?? 100), Simple(109, attributes?.Hunter ?? 0) };
         return B(1, J(entries.Concat(Attributes(player.Statistics)).Select(entry => B(1, entry))
             .Concat([N(11, attributes?.Experience ?? 0), N(8, attributes?.ExperienceFloor ?? 0), N(2, nextExperience), B(10, [])]).ToArray()));
     }

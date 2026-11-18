@@ -63,6 +63,18 @@ public sealed class CombatPreparationTests
         Assert.Equal(0, rewards.Calculate(e, 1, 0, false).Experience);
         rewards.Configure(new("Local", 0m));
         Assert.Equal(0, rewards.Calculate(e, 1, 0, true).Experience);
+        var loot = new CombatRewardCalculator(root!, new("Local", 1, 1000), [e.Monster.Definition]);
+        var award = loot.Calculate(e, 1, 0, true);
+        Assert.Equal(new[] { 1984, 2473, 16504, 16518, 34618 }, award.Items.Select(item => item.Template).Order());
+        Assert.All(award.Items, item => Assert.Equal(1, item.Quantity));
+        loot.Configure(new("Local", 1, 0));
+        Assert.Empty(loot.Calculate(e, 1, 0, true).Items);
+        // Species in the six subareas intersecting the supported surface maps.
+        int[] surface = [4108, 4109, 4110, 982, 4105, 4106, 970, 979, 980, 981, 971, 972, 973, 984, 4046, 4047, 4048, 4049, 3270, 3271, 3272, 3273];
+        var surfaceLoot = new CombatRewardCalculator(root!, new("Local", 1, 1000), surface);
+        foreach (var definition in surface)
+            for (var grade = 1; grade <= 5; grade++)
+                Assert.NotEmpty(surfaceLoot.Calculate(e with { Monster = e.Monster with { Definition = definition, Grade = grade } }, 1, 0, true).Items);
         Assert.NotNull(world.Map(e.Map).Movement!.Approach(world.Initial.CellId, e.GroupCell, e.AttackDistance, world.Movement));
     }
 }

@@ -77,7 +77,7 @@ public sealed partial class WorldSessionTests
     [Fact]
     public void VictoryAwardsScaledExperienceAndRestoresLevelAndStatisticsAfterReconnect()
     {
-        var rewardCalculator = new CombatRewardCalculator(new([1], 5, 10), new(2.5, 2_000_000_000), new("Local", 2.5m));
+        var rewardCalculator = new CombatRewardCalculator(new Krosforge.Core.GroupExperienceRules([1], 5, 10), new(2.5, 2_000_000_000), new("Local", 2.5m));
         CombatCatalog Encounters(WorldEntryCatalog world)
         {
             var e = ResultEncounter(world).Encounters.Single();

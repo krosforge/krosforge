@@ -34,7 +34,7 @@ internal static class WorldEntryWire
         var stats = J(Usable(0, attributes.Life), Simple(95, attributes.Life), Simple(96, 0), Simple(97, 0),
             Simple(5, level), Usable(3, 0), Usable(11, 0), Simple(102, 0),
             Usable(1, attributes.ActionPoints), Usable(23, attributes.MovementPoints),
-            Simple(29, attributes.Energy), Simple(48, attributes.Prospecting),
+            Simple(29, attributes.Energy), Simple(48, attributes.Prospecting), Simple(109, attributes.Hunter),
             N(11, attributes.Experience), N(8, attributes.ExperienceFloor), N(2, attributes.NextLevelExperience), B(10, []));
         return B(1, stats);
     }
