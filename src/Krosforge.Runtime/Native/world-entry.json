@@ -26,7 +26,8 @@
       "HorizontalMilliseconds": 255,
       "VerticalMilliseconds": 150
     },
-    "CancellationLeadSteps": 1
+    "CancellationLeadSteps": 1,
+    "PredictionLeadMilliseconds": 50
   },
   "Transitions": [
     {

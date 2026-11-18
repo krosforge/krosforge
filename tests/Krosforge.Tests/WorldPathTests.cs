@@ -20,6 +20,11 @@ public sealed class WorldPathTests
         Assert.False(path.CanCancel(342, TimeSpan.FromMilliseconds(-1)));
         Assert.Equal(TimeSpan.FromMilliseconds(255), Grid().Validate(0, [0, 1], 0, policy)!.Duration);
     }
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(101)]
+    public void PredictionAllowanceMustRemainBounded(int milliseconds) =>
+        Assert.Throws<ArgumentException>(() => Grid().Validate(0, [0, 1], 0, Policy with { PredictionLeadMilliseconds = milliseconds }));
     [Fact]
     public void ExpandsTurnsAndChecksEveryCellAndElapsedArrival()
     {

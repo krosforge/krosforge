@@ -48,7 +48,11 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             if (character is null || active.ContainsKey(id)) return null;
             var location = locations.LoadOrCreate(profile, ServerPresentation.RealmId, id, catalog.Initial, catalog.Validate);
             if (location is null) return null;
-            var selection = new Selection(this, profile, connection, character, account, emit ?? (_ => { }), disconnect ?? (() => { })) { Location = location };
+            var selection = new Selection(this, profile, connection, character, account, emit ?? (_ => { }), disconnect ?? (() => { }))
+            {
+                Location = location,
+                MovementAvailableAt = EarliestPredictionStart()
+            };
             active.Add(id, selection); return selection;
         }
     }
@@ -95,7 +99,9 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             // Turning back starts at the interpolated position inside the old segment.
             // It retraces only the travelled portion, not an entire additional cell.
             if (credit > TimeSpan.Zero) path = path.ReverseFromPartialSegment(credit);
-            var started = credit > TimeSpan.Zero ? now : Math.Max(now, selection.MovementAvailableAt);
+            // The bounded prediction allowance is shared with the previous deadline.
+            // Completed paths cannot earn another allowance by sending a new request.
+            var started = credit > TimeSpan.Zero ? now : Math.Max(EarliestPredictionStart(), selection.MovementAvailableAt);
             var motion = new Motion(path, request.TurningCells.ToArray(), started, credit);
             selection.Moving = motion;
             selection.UnacknowledgedMotion = motion;
@@ -159,7 +165,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         Persist(selection, selection.Location with { CellId = motion.Path.Cells[^1], Direction = motion.Path.Direction, Revision = checked(selection.Location.Revision + 1) });
         StopMotion(selection);
         selection.InterruptedFrom = null;
-        selection.MovementAvailableAt = clock.GetTimestamp();
+        selection.MovementAvailableAt = checked(motion.Started + TimestampTicks(motion.Path.Duration));
         selection.Emit(new MovementReleased());
     }
     internal void Cancel(Selection selection, int cell)
@@ -239,6 +245,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         selection.InterruptedFrom = index > 0 && arrival > now ? motion.Path.Cells[index - 1] : null;
         selection.MovementAvailableAt = Math.Max(now, arrival);
     }
+    private long EarliestPredictionStart() => checked(clock.GetTimestamp() - TimestampTicks(TimeSpan.FromMilliseconds(catalog.Movement.PredictionLeadMilliseconds)));
     private long TimestampTicks(TimeSpan duration) => checked((long)Math.Ceiling(duration.TotalSeconds * clock.TimestampFrequency));
     private void Reject(Selection selection)
     {

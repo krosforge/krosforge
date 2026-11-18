@@ -28,7 +28,7 @@ internal sealed class WorldEntryCatalog
         Initial = config.Initial;
         Movement = config.Movement;
         if (Movement.Columns != 14 || Movement.MaximumCells is < 2 or > 560 || Movement.StepMilliseconds is < 1 or > 5000 ||
-            Movement.CancellationLeadSteps is < 0 or > 1 || Movement.Timing is not { IsValid: true })
+            Movement.CancellationLeadSteps is < 0 or > 1 || Movement.PredictionLeadMilliseconds is < 0 or > 100 || Movement.Timing is not { IsValid: true })
             throw new InvalidDataException("Invalid movement configuration.");
         transitions = config.Transitions;
         var experience = CreationDataReader.Read(Path.Combine(root, config.ExperienceBundle), config.ExperienceHash, includeKeys: true);

@@ -10,6 +10,7 @@ public sealed record MovementPolicy(int Columns, int MaximumCells, int StepMilli
 {
     public MovementTiming? Timing { get; init; }
     public int CancellationLeadSteps { get; init; }
+    public int PredictionLeadMilliseconds { get; init; }
 }
 
 // Geometry and elapsed time are independent of the client protocol and storage.
@@ -44,7 +45,7 @@ public sealed class MovementGrid
     public WorldPath? Validate(int source, IReadOnlyList<int> turns, int direction, MovementPolicy policy)
     {
         if (policy.Columns != columns || policy.MaximumCells < 2 || policy.StepMilliseconds <= 0 ||
-            policy.CancellationLeadSteps is < 0 or > 1 || policy.Timing is { IsValid: false })
+            policy.CancellationLeadSteps is < 0 or > 1 || policy.PredictionLeadMilliseconds is < 0 or > 100 || policy.Timing is { IsValid: false })
             throw new ArgumentException("Invalid movement policy.");
         if (direction is < 0 or > 7 || turns.Count < 2 || turns.Count > policy.MaximumCells ||
             turns[0] != source || turns[^1] == source || !cells.TryGetValue(source, out var origin) ||

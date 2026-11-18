@@ -6,6 +6,79 @@ namespace Krosforge.Tests;
 public sealed partial class WorldSessionTests
 {
     [Fact]
+    public void ObservedRapidContinuationAcrossDifferentDirectionsDoesNotRewind()
+    {
+        var policy = new MovementPolicy(14, 560, 200)
+        { Timing = new(170, 255, 150), CancellationLeadSteps = 1, PredictionLeadMilliseconds = 50 };
+        var catalog = new WorldEntryCatalog(new(100, 402, 0, 1), policy, [],
+            new EntryMap(100, 1, new HashSet<int> { 402, 401, 414, 413, 412, 411, 410 }));
+        using var f = new MovementFixture(deferTimers: true, catalog: catalog);
+        var (a, notices) = f.Join("Alpha"); var (_, observer) = f.Join("Beta");
+        // Request timing observed in 3.7.14.18. A single cell is jpj; longer
+        // arrays are jok turning points. No timer continuation is dispatched.
+        (int Milliseconds, int[] Cells)[] requests =
+        [
+            (0, [402, 401, 414, 410]), (364, [414]), (371, [414, 401, 402]),
+            (847, [401]), (855, [401, 402]), (1372, [402]),
+            (1374, [402, 401, 414, 410]), (1955, [413]), (1964, [413, 410]),
+            (2390, [411]), (2397, [411, 410]), (3089, [410, 414, 401, 402]),
+            (3739, [413]), (3747, [413, 414, 401, 402]), (4106, [401])
+        ];
+        var previous = 0;
+        foreach (var (milliseconds, cells) in requests)
+        {
+            f.Clock.Advance(TimeSpan.FromMilliseconds(milliseconds - previous)); previous = milliseconds;
+            if (cells.Length == 1)
+            {
+                f.Service.Cancel(a, cells[0]);
+                Assert.Equal(cells[0], a.Location.CellId);
+                Assert.Equal(cells[0], observer.OfType<ActorCorrected>().Last().Cell);
+            }
+            else
+            {
+                f.Service.Move(a, new(100, cells, 0));
+                Assert.NotNull(a.Moving);
+                Assert.IsType<ActorMoved>(notices[^1]);
+            }
+            Assert.Empty(notices.OfType<ActorCorrected>());
+        }
+    }
+
+    [Fact]
+    public void PredictionLeadCoversBoundarySkewWithoutGrantingCreditPerRequest()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1, predictionLeadMilliseconds: 50, stepMilliseconds: 255);
+        var (a, notices) = f.Join("Alpha"); var (_, observer) = f.Join("Beta");
+        f.Service.Move(a, new(100, [0, 3], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(150)); f.Service.Cancel(a, 1);
+        f.Service.Move(a, new(100, [1, 3], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(353)); f.Service.Cancel(a, 3);
+        // The request arrives just before the strict second-segment boundary.
+        Assert.Equal(3, a.Location.CellId); Assert.Empty(notices.OfType<ActorCorrected>());
+        Assert.Equal(3, observer.OfType<ActorCorrected>().Last().Cell);
+        f.Service.Move(a, new(100, [3, 0], 4));
+        Assert.NotNull(a.Moving); // Remaining time still fits the reversed segment.
+    }
+
+    [Fact]
+    public void RepeatedCompletedMovesCannotAccumulatePredictionLead()
+    {
+        using var f = new MovementFixture(deferTimers: true, predictionLeadMilliseconds: 50, stepMilliseconds: 255);
+        var (a, _) = f.Join("Alpha");
+        f.Service.Move(a, new(100, [0, 1], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(205)); f.Service.Move(a, new(100, [1, 2], 0));
+        Assert.Equal(1, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(205)); f.Service.Advance(a, a.Moving!);
+        Assert.Equal(1, a.Location.CellId); // A second request did not mint another 50 ms.
+        f.Clock.Advance(TimeSpan.FromMilliseconds(50)); f.Service.Move(a, new(100, [2, 3], 0));
+        Assert.Equal(2, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(254)); f.Service.Advance(a, a.Moving!);
+        Assert.Equal(2, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(1)); f.Service.Advance(a, a.Moving!);
+        Assert.Equal(3, a.Location.CellId);
+    }
+
+    [Fact]
     public async Task InterruptionCanReconcileTheLastUnacknowledgedPathAfterItsTimerCompleted()
     {
         using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
