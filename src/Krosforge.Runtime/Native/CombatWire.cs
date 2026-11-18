@@ -64,6 +64,12 @@ internal static class CombatWire
             B(3, J(B(2, new CharacterWireCodec().Look(player ? character.Look : monster.Look)), B(4, fight))));
     }
     private static byte[] Zones(CombatBoard board) => J(Packed(1, board.Placements[1].Order()), Packed(2, board.Placements[0].Order()));
+    private static byte[] ControlledTeam(CombatView view)
+    {
+        var player = view.Positions.Single(p => p.Controlled);
+        var member = J(N(3, player.ActorId), B(5, J(B(2, Encoding.UTF8.GetBytes(view.Character.Name)), N(3, view.Character.Level))));
+        return J(N(1, checked((int)view.Id)), B(2, J(N(6, player.Team), N(8, player.ActorId), B(4, B(2, member)))));
+    }
     private static byte[][] Load(CombatView view) =>
     [
         E("jnj", J(N(10, view.Map.Id), N(12, view.Map.Subarea), B(11, J(N(1, 1), N(3, 1))))),
@@ -71,7 +77,8 @@ internal static class CombatWire
         E("jww", J(N(2, 1), N(4, 1), N(5, view.Encounter.FightType))),
         .. view.Positions.OrderByDescending(p => p.Controlled).Select(p => E("jwj", B(1, Fighter(view, p)))),
         E("jxk", J(B(1, Zones(view.Encounter.Board)), N(2, 0))),
-        E("juf", N(6, view.Character.Id))
+        E("juf", N(6, view.Character.Id)),
+        E("jxh", ControlledTeam(view))
     ];
     internal static byte[][] Events(WorldNotice notice) => notice switch
     {

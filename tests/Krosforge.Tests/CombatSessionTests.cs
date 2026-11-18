@@ -111,7 +111,8 @@ public sealed partial class WorldSessionTests
             await Send(world, "hms", WorldProtocol.Number(2, unchecked((ulong)-30001L)), token);
             Assert.Equal(unchecked((ulong)-30001L), (await Event(world, "kjz", token)).UInt64(1));
             await Event(world, "kjy", token); Assert.Equal(1UL, (await Event(world, "kjp", token)).UInt64(1));
-            Assert.Equal(4UL, (await Event(world, "jxi", token)).UInt64(6));
+            var joined = await Event(world, "jxi", token);
+            Assert.Equal(4UL, joined.UInt64(6));
             Assert.Equal(100UL, (await Event(world, "jow", token)).UInt64(1));
             await Send(world, "kjt", WorldProtocol.Number(1, 100), token);
             var map = await Event(world, "jnj", token); Assert.True(map.Has(11)); Assert.Equal(100UL, map.UInt64(10));
@@ -126,6 +127,15 @@ public sealed partial class WorldSessionTests
             var zones = ProtoObject.Read((await Event(world, "jxk", token)).Bytes(1), 128);
             Assert.Equal(new byte[] { 3,4,5 }, zones.Bytes(1)); Assert.Equal(new byte[] { 0,1,2 }, zones.Bytes(2));
             Assert.Equal((ulong)id, (await Event(world, "juf", token)).UInt64(6));
+            var teamUpdate = await Event(world, "jxh", token);
+            Assert.Equal(joined.UInt64(1), teamUpdate.UInt64(1));
+            var team = ProtoObject.Read(teamUpdate.Bytes(2), 128);
+            Assert.Equal(0UL, team.UInt64(6, false)); Assert.Equal((ulong)id, team.UInt64(8));
+            var members = ProtoObject.Read(team.Bytes(4), 128).Repeated(2);
+            var member = ProtoObject.Read(Assert.Single(members).Bytes, 128);
+            Assert.Equal((ulong)id, member.UInt64(3));
+            var memberIdentity = ProtoObject.Read(member.Bytes(5), 128);
+            Assert.Equal("Hero", memberIdentity.Text(2)); Assert.Equal(1UL, memberIdentity.UInt64(3));
             await Send(world, "jxb", WorldProtocol.Join(WorldProtocol.Number(1, 1), WorldProtocol.Number(2, (ulong)id)), token);
             var position = (await Event(world, "jws", token)).Repeated(2).Select(p => ProtoObject.Read(p.Bytes, 128)).Single(p => p.UInt64(2) == (ulong)id);
             Assert.Equal(1UL, position.UInt64(3));
