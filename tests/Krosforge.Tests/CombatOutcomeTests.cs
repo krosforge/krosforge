@@ -126,6 +126,8 @@ public sealed partial class WorldSessionTests
         var result = Assert.Single(notices.OfType<FightCompleted>());
         Assert.Equal(0, result.Receipt.Reward); Assert.Equal(0, a.Currency); Assert.Null(a.Fight);
         Assert.Equal(forfeit ? "abandoned" : "defeat", result.Receipt.Status);
+        Assert.Equal(forfeit ? 0 : 100, result.Summary.DamageTaken);
+        Assert.Equal(0, result.Summary.DamageDealt); Assert.Equal(0, result.Summary.EnemiesDefeated);
         Assert.Equal(f.Catalog.Initial, a.Location); f.Service.Join(a, 100); Assert.True(a.MapReady);
     }
     [Fact]
@@ -147,6 +149,8 @@ public sealed partial class WorldSessionTests
         Assert.Equal(2, rows.Count); Assert.Equal(2UL, rows[(ulong)a.Character.Id].UInt64(1));
         Assert.Equal(0UL, rows[ulong.MaxValue].UInt64(1, false));
         Assert.Equal(1UL, ProtoObject.Read(rows[(ulong)a.Character.Id].Bytes(3), 4096).UInt64(2));
-        Assert.Equal(1UL, Body(1, "irl").UInt64(4)); Assert.NotEmpty(Body(2, "krg").Bytes(1));
+        var summary = ProtoObject.Read(Body(1, "jwh").Bytes(2), 4096);
+        Assert.Equal(15UL, summary.UInt64(4)); Assert.Equal(0UL, summary.UInt64(5, false)); Assert.Equal(1UL, summary.UInt64(7));
+        Assert.Equal(1UL, Body(2, "irl").UInt64(4)); Assert.NotEmpty(Body(3, "krg").Bytes(1));
     }
 }

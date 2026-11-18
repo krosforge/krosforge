@@ -94,6 +94,28 @@ public sealed class CombatTurnsTests
         Assert.InRange(path.Count, 2, 4); Assert.DoesNotContain(170, path); Assert.NotNull(battle.Move(1, 1, path));
     }
     [Fact]
+    public void SummaryCountsEffectiveDamageOnceAndExcludesEmptyRejectedAndAlliedKills()
+    {
+        var spell = Spell() with { PerTarget = 1 };
+        var battle = new CombatTurns(Board(), [Player(100, spell), Enemy(128, 15)]);
+        battle.Cast(1, 1, 1, 114, (min, _) => min);
+        Assert.Equal(new CombatSummary(), battle.Summary(1));
+        battle.Cast(1, 1, 1, 128, (min, _) => min);
+        Assert.Null(battle.Cast(1, 1, 1, 128, (min, _) => min));
+        battle.Next(1, 1); battle.Next(-1, 2);
+        battle.Cast(1, 3, 1, 128, (min, _) => min);
+        Assert.Equal(new CombatSummary(15, 0, 1), battle.Summary(1));
+        Assert.Equal(new CombatSummary(0, 15, 0), battle.Summary(-1));
+        Assert.Null(battle.Cast(1, 3, 1, 128, (min, _) => min));
+        Assert.Equal(new CombatSummary(15, 0, 1), battle.Summary(1));
+
+        var ally = Enemy(128, 5) with { Id = 2, Team = 0 };
+        var friendly = new CombatTurns(Board(), [Player(100, Spell()), ally, Enemy(170)]);
+        friendly.Cast(1, 1, 1, 128, (min, _) => min);
+        Assert.Equal(new CombatSummary(5), friendly.Summary(1));
+        Assert.Equal(new CombatSummary(0, 5), friendly.Summary(2));
+    }
+    [Fact]
     public void InstalledBooksReadOnlyExplicitSupportedActionsAndStatistics()
     {
         var root = Environment.GetEnvironmentVariable("KROSFORGE_TEST_CLIENT");

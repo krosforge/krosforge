@@ -11,6 +11,8 @@ internal static partial class CombatWire
             B(2, J(N(2, f.Alive ? 1 : 0), N(5, f.Id), f.Level is { } level ? B(3, N(2, level)) : [])),
             f.Id == result.Character.Id ? B(3, N(2, result.Receipt.Reward)) : []))).ToArray();
         return [E("jwp", J(team, J(fighters), N(8, result.Receipt.DurationMilliseconds))),
+            E("jwh", B(2, J(N(4, checked((int)result.Summary.DamageDealt)),
+                N(5, checked((int)result.Summary.DamageTaken)), N(7, result.Summary.EnemiesDefeated)))),
             E("irl", WorldEntryWire.EmptyInventory(result.Receipt.Balance)),
             E("krg", WorldEntryWire.Statistics(result.Attributes, result.Character.Level))];
     }

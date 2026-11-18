@@ -43,6 +43,8 @@ public sealed partial class WorldSessionTests
                 var player = result.Repeated(4).Select(v => ProtoObject.Read(v.Bytes, 4096))
                     .Single(v => ProtoObject.Read(v.Bytes(2), 4096).UInt64(5) == (ulong)id);
                 Assert.Equal(2UL, player.UInt64(1)); Assert.Equal(1UL, ProtoObject.Read(player.Bytes(3), 4096).UInt64(2));
+                var summary = ProtoObject.Read((await Event(world, "jwh", token)).Bytes(2), 4096);
+                Assert.Equal(15UL, summary.UInt64(4)); Assert.Equal(1UL, summary.UInt64(7));
                 Assert.Equal(1UL, (await Event(world, "irl", token)).UInt64(4));
                 foreach (var type in new[] { "krg", "kjy", "kjp", "jow" }) await Event(world, type, token);
                 await LoadedMap(world, 100, token);
