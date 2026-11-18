@@ -48,14 +48,17 @@ internal sealed class CharacterStore(string directory)
         return Convert.ToInt64(c.ExecuteScalar()) == 0;
     }
     internal CharacterCreationResult Create(Guid profile, int realm, string name, CharacterAppearance appearance)
+        => Create(profile, realm, name, appearance, out _);
+    internal CharacterCreationResult Create(Guid profile, int realm, string name, CharacterAppearance appearance, out long createdId)
     {
+        createdId = 0;
         name = CharacterName.Normalize(name);
         using var db = Open(); using var tx = db.BeginTransaction(deferred: false); using var c = Scope(db, profile, realm); c.Transaction = tx;
         c.CommandText = "SELECT COUNT(*) FROM characters WHERE profile_id=$profile AND realm_id=$realm";
         if (Convert.ToInt64(c.ExecuteScalar()) >= 5) return CharacterCreationResult.Full;
-        c.CommandText = "INSERT INTO characters(profile_id,realm_id,name,name_key,appearance) VALUES($profile,$realm,$name,$key,$appearance)";
+        c.CommandText = "INSERT INTO characters(profile_id,realm_id,name,name_key,appearance) VALUES($profile,$realm,$name,$key,$appearance) RETURNING id";
         c.Parameters.AddWithValue("$name", name); c.Parameters.AddWithValue("$key", CharacterName.Key(name)); c.Parameters.AddWithValue("$appearance", JsonSerializer.Serialize(appearance));
-        try { c.ExecuteNonQuery(); tx.Commit(); return CharacterCreationResult.Success; }
+        try { var id = Convert.ToInt64(c.ExecuteScalar()); tx.Commit(); createdId = id; return CharacterCreationResult.Success; }
         catch (SqliteException e) when (e.SqliteExtendedErrorCode == 2067) { return CharacterCreationResult.NameUnavailable; }
     }
     internal bool Delete(Guid profile, int realm, long id)

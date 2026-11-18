@@ -66,10 +66,11 @@ internal sealed partial class LocalSessionHost
                         case "kru" when ready:
                             pendingDeletion = null;
                             if (characters is null) { reply = WorldProtocol.Event("ksn", characterWire.CreationResult("failure")); break; }
-                            var result = characters.Create(session.Profile.Id, characterWire.ReadCreation(request.Payload));
+                            var result = characters.Create(session.Profile.Id, characterWire.ReadCreation(request.Payload), out var createdId);
                             await WorldProtocol.Write(stream, WorldProtocol.Event("ksn", characterWire.CreationResult(result)), deadline.Token);
                             if (result != "success") continue;
-                            reply = WorldProtocol.Event("ksv", characterWire.List(characters.List(session.Profile.Id))); break;
+                            // The native creation flow selects the first entry in this response.
+                            reply = WorldProtocol.Event("ksv", characterWire.List(characters.List(session.Profile.Id).OrderByDescending(c => c.Id == createdId))); break;
                         case "ktb" when ready && characters is not null:
                             body.Only(); reply = WorldProtocol.Event("ksp", characterWire.SuggestedName(characters.Suggest())); break;
                         case "kta" when ready: pendingDeletion = null; reply = WorldProtocol.Event("ksb", WorldProtocol.Bytes(2, [])); break;
