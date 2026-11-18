@@ -78,4 +78,36 @@ public sealed partial class WorldSessionTests
         finally { Directory.Delete(root, true); }
     }
 
+    // Fixed synthetic protobuf records, derived independently of CharacterWireCodec.
+    // See Fixtures/character-appearance-contract.md for source/build and field paths.
+    [Theory]
+    [InlineData(0, "1801223C18013207C3896C6F6469652A2F1802322708071A0685078607A1062A188080800881808010D6E8C818EF9BAF25FFFFFF2F8080803432016E0A0220002A2708011207C3896C6F64696518002002286538CA0142110001D6E848EF9BAF05FFFFFF0780808004")]
+    [InlineData(1, "1801223C18013207C3896C6F6469652A2F1802322708071A0685078607A1062A188080800881808010D6E8C818EF9BAF25FFFFFF2F8080803432016E0A0220012A2708011207C3896C6F64696518012002286538CA0142110001D6E848EF9BAF05FFFFFF0780808004")]
+    public async Task TcpRosterMatchesIndependentAppearanceContract(int gender, string expectedHex)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "appearance-wire-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var profiles = new ProfileStore(root); var profile = profiles.Create("Account");
+            Dictionary<string, object> Option(int id, string skins) => new() { ["id"] = id, ["breed"] = 2, ["gender"] = gender, ["availableAtCreation"] = 1, ["payable"] = 0, ["order"] = 0, ["skins"] = skins };
+            var prefix = gender == 0 ? "male" : "female";
+            var catalog = new CreationCatalog(new() { [2] = new() { [prefix + "Look"] = "{7|999||110}", [prefix + "Colors"] = new Dictionary<string, object> { ["array"] = new object[] { 10, 20, 30, 40, 50, 60 } } } },
+                new() { [101] = Option(101, "801") }, new() { [202] = Option(202, "901,902") });
+            await using var host = new LocalSessionHost(characters: new CharacterService(new CharacterStore(root), catalog));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); var token = timeout.Token;
+            using var session = host.Register(profile, "fr", _ => { }); using var login = new TcpClient();
+            await Login(host, login, session.IssueTicket(), token); using var world = await Enter(host, login, token);
+            // Non-default class/head/body, both genders, UTF-8 name, six distinct colors,
+            // and an untrusted input ID that must be replaced by the database identity.
+            var appearance = WorldProtocol.Join(WorldProtocol.Number(1, 900), S(2, "Élodie"), WorldProtocol.Number(3, (ulong)gender), WorldProtocol.Number(4, 2), WorldProtocol.Number(5, 101), WorldProtocol.Number(7, 202),
+                WorldProtocol.Join(new ulong[] { 0, 1, 0x123456, 0xabcdef, 0xffffff, 0x800000 }.Select(c => WorldProtocol.Number(8, c)).ToArray()));
+            await Send(world, "kru", WorldProtocol.Bytes(1, appearance), token); await Event(world, "ksn", token);
+            var created = Assert.Single((await Event(world, "ksv", token)).Repeated(2));
+            Assert.Equal(Convert.FromHexString(expectedHex), created.Bytes);
+            await Send(world, "ksu", [], token);
+            Assert.Equal(Convert.FromHexString(expectedHex), Assert.Single((await Event(world, "ksv", token)).Repeated(2)).Bytes);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
 }
