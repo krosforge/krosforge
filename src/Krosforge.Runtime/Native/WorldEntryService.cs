@@ -10,11 +10,13 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
     private readonly Dictionary<long, Selection> active = [];
     private readonly WorldEntryCatalog catalog = catalog;
     private readonly TimeProvider clock = time ?? TimeProvider.System;
-    internal sealed class Motion(WorldPath path, int[] turns, long started)
+    internal sealed class Motion(WorldPath path, int[] turns, long started, TimeSpan firstStepCredit)
     {
         internal WorldPath Path { get; } = path;
         internal int[] Turns { get; } = turns;
         internal long Started { get; } = started;
+        internal bool Announced { get; set; }
+        internal TimeSpan FirstStepCredit { get; } = firstStepCredit;
         internal CancellationTokenSource Cancellation { get; } = new();
     }
     internal sealed class Selection(WorldEntryService owner, Guid profile, object connection, CharacterWire character, long account,
@@ -32,7 +34,9 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         internal Action<WorldNotice> Emit { get; } = emit;
         internal Action Disconnect { get; } = disconnect;
         internal Motion? Moving { get; set; }
+        internal Motion? UnacknowledgedMotion { get; set; }
         internal long MovementAvailableAt { get; set; }
+        internal int? InterruptedFrom { get; set; }
         internal Task MovementCompletion { get; set; } = Task.CompletedTask;
         public void Dispose() => owner.Release(this);
     }
@@ -65,7 +69,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             var visible = Members(map).OrderBy(s => s.Character.Id).ToArray();
             selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray()));
             foreach (var other in visible)
-                if (other.Moving is { } motion)
+                if (other.Moving is { Announced: true } motion)
                 {
                     var index = motion.Path.ReachedIndex(clock.GetElapsedTime(motion.Started, now));
                     var remaining = motion.Path.Cells.Skip(index).ToArray();
@@ -85,16 +89,41 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             var path = request.Map == selection.Location.MapId
                 ? selection.Map.Movement!.Validate(selection.Location.CellId, request.TurningCells, request.Direction, catalog.Movement) : null;
             if (selection.Moving is not null || path is null) { Reject(selection); return; }
-            var motion = new Motion(path, request.TurningCells.ToArray(), Math.Max(clock.GetTimestamp(), selection.MovementAvailableAt));
+            var now = clock.GetTimestamp();
+            var credit = selection.InterruptedFrom == path.Cells[1] && selection.MovementAvailableAt > now
+                ? clock.GetElapsedTime(now, selection.MovementAvailableAt) : TimeSpan.Zero;
+            // Turning back starts at the interpolated position inside the old segment.
+            // It retraces only the travelled portion, not an entire additional cell.
+            if (credit > TimeSpan.Zero) path = path.ReverseFromPartialSegment(credit);
+            var started = credit > TimeSpan.Zero ? now : Math.Max(now, selection.MovementAvailableAt);
+            var motion = new Motion(path, request.TurningCells.ToArray(), started, credit);
             selection.Moving = motion;
-            Broadcast(selection.Location.MapId, new ActorMoved(selection.Character.Id, path.Cells));
+            selection.UnacknowledgedMotion = motion;
+            AnnounceMovement(selection, motion);
             selection.MovementCompletion = CompleteLater(selection, motion);
         }
+    }
+    private void AnnounceMovement(Selection selection, Motion motion)
+    {
+        if (motion.Announced || Elapsed(motion) < TimeSpan.Zero) return;
+        motion.Announced = true;
+        Broadcast(selection.Location.MapId, new ActorMoved(selection.Character.Id, motion.Path.Cells));
     }
     private async Task CompleteLater(Selection selection, Motion motion)
     {
         try
         {
+            while (true)
+            {
+                var untilStart = -Elapsed(motion);
+                if (untilStart <= TimeSpan.Zero) break;
+                await Task.Delay(untilStart, clock, motion.Cancellation.Token);
+            }
+            lock (gate)
+            {
+                if (!Current(selection) || !ReferenceEquals(selection.Moving, motion)) return;
+                AnnounceMovement(selection, motion);
+            }
             while (true)
             {
                 var remaining = motion.Path.Duration - Elapsed(motion);
@@ -116,6 +145,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         lock (gate)
         {
             if (!Current(selection) || !ReferenceEquals(selection.Moving, motion)) return;
+            AnnounceMovement(selection, motion);
             CompleteExpiredMotion(selection);
         }
     }
@@ -126,6 +156,8 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         if (selection.Moving is not { } motion || Elapsed(motion) < motion.Path.Duration) return;
         Persist(selection, selection.Location with { CellId = motion.Path.Cells[^1], Direction = motion.Path.Direction, Revision = checked(selection.Location.Revision + 1) });
         StopMotion(selection);
+        selection.InterruptedFrom = null;
+        selection.MovementAvailableAt = clock.GetTimestamp();
         selection.Emit(new MovementReleased());
     }
     internal void Cancel(Selection selection, int cell)
@@ -135,15 +167,25 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             Require(selection);
             if (!selection.MapReady) throw new InvalidDataException("Map is not ready.");
             CompleteExpiredMotion(selection);
-            if (selection.Moving is not { } motion || !motion.Path.CanCancel(cell, Elapsed(motion))) { Reject(selection); return; }
+            var motion = selection.Moving ?? selection.UnacknowledgedMotion;
+            if (motion is null || !motion.Path.CanCancel(cell, Elapsed(motion))) { Reject(selection); return; }
             var index = Array.IndexOf(motion.Path.Cells.ToArray(), cell);
             PersistCell(selection, motion.Path, index);
-            // Preserve the unfinished segment's time across repeated redirects.
-            var arrival = checked(motion.Started + (long)Math.Ceiling(motion.Path.ArrivalAt(index).TotalSeconds * clock.TimestampFrequency));
-            selection.MovementAvailableAt = Math.Max(selection.MovementAvailableAt, arrival);
+            RetainPartialSegment(selection, motion, index);
             StopMotion(selection);
+            selection.UnacknowledgedMotion = null;
             selection.Emit(new MovementReleased());
             Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId));
+        }
+    }
+    internal void Acknowledge(Selection selection)
+    {
+        lock (gate)
+        {
+            Require(selection);
+            // ACK has no movement identity. Never finish a path or clear a newer
+            // active movement because an earlier animation's ACK arrived late.
+            if (selection.Moving is null) selection.UnacknowledgedMotion = null;
         }
     }
     internal void ChangeMap(Selection selection, long destination)
@@ -158,6 +200,7 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             if (next is null) { Reject(selection); return; }
             var previousMap = selection.Location.MapId;
             Persist(selection, next);
+            selection.UnacknowledgedMotion = null;
             selection.MapReady = false;
             Broadcast(previousMap, new ActorDeparted(selection.Character.Id));
             selection.Emit(new MapLoading(next.MapId));
@@ -175,11 +218,35 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
         if (cell != selection.Location.CellId || facing != selection.Location.Direction)
             Persist(selection, selection.Location with { CellId = cell, Direction = facing, Revision = checked(selection.Location.Revision + 1) });
     }
+    private void RetainPartialSegment(Selection selection, Motion motion, int index)
+    {
+        var now = clock.GetTimestamp();
+        var elapsed = clock.GetElapsedTime(motion.Started, now);
+        if (index == 0 && elapsed < TimeSpan.Zero) return; // Waiting for the prior segment.
+        if (index == 0 && motion.FirstStepCredit > TimeSpan.Zero && motion.Path.ReachedIndex(elapsed) == 0)
+        {
+            // A rejected/cancelled reversal must not erase the outstanding fraction
+            // to its logical origin, otherwise alternating bad requests could mint steps.
+            selection.InterruptedFrom = motion.Path.Cells[1];
+            selection.MovementAvailableAt = checked(now + TimestampTicks(motion.FirstStepCredit + elapsed));
+            return;
+        }
+        var arrival = checked(motion.Started + TimestampTicks(motion.Path.ArrivalAt(index)));
+        selection.InterruptedFrom = index > 0 && arrival > now ? motion.Path.Cells[index - 1] : null;
+        selection.MovementAvailableAt = Math.Max(now, arrival);
+    }
+    private long TimestampTicks(TimeSpan duration) => checked((long)Math.Ceiling(duration.TotalSeconds * clock.TimestampFrequency));
     private void Reject(Selection selection)
     {
         // A bad request stops at the reached cell, never at the old path's origin.
-        if (selection.Moving is { } motion) PersistCell(selection, motion.Path, motion.Path.ReachedIndex(Elapsed(motion)));
+        if (selection.Moving is { } motion)
+        {
+            var index = motion.Path.ReachedIndex(Elapsed(motion));
+            PersistCell(selection, motion.Path, index);
+            RetainPartialSegment(selection, motion, index);
+        }
         StopMotion(selection);
+        selection.UnacknowledgedMotion = null;
         selection.Emit(new MovementReleased());
         Broadcast(selection.Location.MapId, new ActorCorrected(selection.Character.Id, selection.Location.CellId));
     }

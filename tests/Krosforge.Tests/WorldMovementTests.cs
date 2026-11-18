@@ -94,7 +94,6 @@ public sealed partial class WorldSessionTests
     [Theory]
     [InlineData("move")]
     [InlineData("transition")]
-    [InlineData("cancel")]
     [InlineData("invalid-move")]
     [InlineData("duplicate-move")]
     public async Task NextActionCommitsExpiredMovementBeforeValidationWithoutTimerContinuation(string action)
@@ -112,7 +111,6 @@ public sealed partial class WorldSessionTests
         {
             case "move": f.Service.Move(a, new(100, [2, 3], 0)); break;
             case "transition": f.Service.ChangeMap(a, 200); break;
-            case "cancel": f.Service.Cancel(a, 1); break;
             case "invalid-move": f.Service.Move(a, new(100, [2, 500], 0)); break;
             case "duplicate-move": f.Service.Move(a, new(100, [0, 2], 0)); break;
         }

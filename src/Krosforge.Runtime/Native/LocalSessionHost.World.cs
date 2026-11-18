@@ -129,6 +129,7 @@ internal sealed partial class LocalSessionHost
                             // This protocol ACK has no movement identity. It never advances
                             // the server clock or commits a position, including when delayed.
                             WorldMovementWire.Acknowledgement(request.Payload);
+                            worldEntry!.Acknowledge(selected);
                             continue;
                         case "jpj" when selected is { MapReady: true }:
                             var cancellation = WorldMovementWire.Cancellation(request.Payload);

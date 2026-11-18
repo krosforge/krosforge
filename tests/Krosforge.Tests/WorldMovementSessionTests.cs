@@ -51,15 +51,17 @@ public sealed partial class WorldSessionTests
                 var correction = await Event(socket, "joz", token);
                 Assert.Equal(1UL, correction.UInt64(1)); Assert.Equal((ulong)ca, correction.UInt64(2));
             }
-            await Send(wa, "jok", Convert.FromHexString("0a0201001064"), token);
+            await Send(wa, "jok", Convert.FromHexString("0a0201031064"), token);
+            await Send(wa, "kne", [], token); await Event(wa, "knb", token); // New animation waits for the unfinished segment.
+            clock.Advance(TimeSpan.FromMilliseconds(400));
             foreach (var socket in new[] { wa, wb })
-                Assert.Equal(new byte[] { 1, 0 }, (await Event(socket, "jnz", token)).Bytes(1));
+                Assert.Equal(new byte[] { 1, 2, 3 }, (await Event(socket, "jnz", token)).Bytes(1));
             await Send(wa, "jny", [], token); // Old animation ACK cannot finish the new path.
-            clock.Advance(TimeSpan.FromMilliseconds(1000));
+            clock.Advance(TimeSpan.FromMilliseconds(600));
             await Send(wa, "kne", [], token); await Event(wa, "knb", token);
             Assert.Equal(new WorldLocation(100, 1, 0, 2), locations.LoadOrCreate(a.Id, 290, ca, catalog.Initial, catalog.Validate));
-            clock.Advance(TimeSpan.FromMilliseconds(400)); await Event(wa, "jpk", token);
-            Assert.Equal(new WorldLocation(100, 0, 4, 3), locations.LoadOrCreate(a.Id, 290, ca, catalog.Initial, catalog.Validate));
+            clock.Advance(TimeSpan.FromMilliseconds(1400)); await Event(wa, "jpk", token);
+            Assert.Equal(new WorldLocation(100, 3, 0, 3), locations.LoadOrCreate(a.Id, 290, ca, catalog.Initial, catalog.Validate));
             Assert.Equal(catalog.Initial, locations.LoadOrCreate(b.Id, 290, cb, catalog.Initial, catalog.Validate));
         }
         finally { Directory.Delete(root, true); }

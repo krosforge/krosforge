@@ -87,6 +87,11 @@ public sealed record WorldPath(IReadOnlyList<int> Cells, int Direction, TimeSpan
     public int CancellationLeadSteps { get; init; }
     public TimeSpan ArrivalAt(int index) => ArrivalTimes.Count == 0 ? StepDuration * index : ArrivalTimes[index];
     public TimeSpan Duration => ArrivalAt(Cells.Count - 1);
+    public WorldPath ReverseFromPartialSegment(TimeSpan remaining)
+    {
+        if (remaining < TimeSpan.Zero || remaining > ArrivalAt(1)) throw new ArgumentOutOfRangeException(nameof(remaining));
+        return this with { ArrivalTimes = Enumerable.Range(0, Cells.Count).Select(i => i == 0 ? TimeSpan.Zero : ArrivalAt(i) - remaining).ToArray() };
+    }
     public int ReachedIndex(TimeSpan elapsed)
     {
         var index = 0;
