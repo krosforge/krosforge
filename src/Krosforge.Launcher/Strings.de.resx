@@ -333,5 +333,6 @@ Gib zur Bestätigung „{0}“ ein.</value>
   <data name="ErrorServerPresentation" xml:space="preserve"><value>Der Servername konnte nicht angewendet werden. Prüfe die Originalinstallation und versuche es erneut.</value></data>
   <data name="ExperienceMultiplier" xml:space="preserve"><value>Erfahrungsmultiplikator</value></data>
   <data name="DropMultiplier" xml:space="preserve"><value>Beutemultiplikator</value></data>
-  <data name="ErrorServerRates" xml:space="preserve"><value>Gib Multiplikatoren von 0 bis 1000 ein. Der Wert 1 behält die Basisrate bei.</value></data>
+  <data name="ErrorServerRates" xml:space="preserve"><value>Gib Multiplikatoren von 0 bis 100 mit höchstens zwei Nachkommastellen ein.</value></data>
+  <data name="ServerRatesHint" xml:space="preserve"><value>Mit 0 werden Belohnungen deaktiviert, mit 1 gilt die Basisrate. Maximum: 100× mit höchstens zwei Nachkommastellen.</value></data>
 </root>

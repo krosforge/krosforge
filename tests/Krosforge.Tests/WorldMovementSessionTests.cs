@@ -8,18 +8,22 @@ namespace Krosforge.Tests;
 
 public sealed partial class WorldSessionTests
 {
-    private static async Task<ProtoObject> EnterMap(TcpClient world, long id, long map, CancellationToken token)
+    private static async Task<ProtoObject> EnterMap(TcpClient world, long id, long map, CancellationToken token, int? experiencePercent = null, int? dropPercent = null)
     {
         await Send(world, "kta", WorldProtocol.Number(1, (ulong)id), token); await Event(world, "ksb", token);
         await Send(world, "kkc", [], token); await Event(world, "kjp", token);
         Assert.Equal((ulong)map, (await Event(world, "jow", token)).UInt64(1));
         await Event(world, "irl", token); await Event(world, "ith", token); await Event(world, "krg", token);
-        return await LoadedMap(world, map, token);
+        return await LoadedMap(world, map, token, experiencePercent, dropPercent);
     }
-    private static async Task<ProtoObject> LoadedMap(TcpClient world, long map, CancellationToken token)
+    private static async Task<ProtoObject> LoadedMap(TcpClient world, long map, CancellationToken token, int? experiencePercent = null, int? dropPercent = null)
     {
         await Send(world, "kjt", WorldProtocol.Number(1, (ulong)map), token);
-        var snapshot = await Event(world, "jnj", token); await Event(world, "jnv", token); return snapshot;
+        var snapshot = await Event(world, "jnj", token); await Event(world, "jnv", token);
+        var rates = await Event(world, "hme", token); Assert.Equal(100UL, rates.UInt64(5));
+        if (experiencePercent is { } xp) Assert.Equal((ulong)xp, rates.UInt64(3));
+        if (dropPercent is { } drops) Assert.Equal((ulong)drops, rates.UInt64(4));
+        return snapshot;
     }
     private static ulong[] ActorIds(ProtoObject snapshot) => snapshot.Repeated(3).Select(f => ProtoObject.Read(f.Bytes, 128).UInt64(1)).ToArray();
     [Fact]

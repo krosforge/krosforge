@@ -82,8 +82,8 @@ public sealed class RuntimeService : IDisposable
     }
     private static ServerSettings ValidateServer(ServerSettings settings)
     {
-        if (settings.ExperienceMultiplier is < 0 or > 1000 || settings.DropMultiplier is < 0 or > 1000)
-            throw new ArgumentException("ErrorServerRates");
+        _ = ServerRewardRates.Percentage(settings.ExperienceMultiplier);
+        _ = ServerRewardRates.Percentage(settings.DropMultiplier);
         return settings with { Name = Krosforge.Core.ServerName.Normalize(settings.Name ?? "") };
     }
     private void SaveServer(ServerSettings settings) => store.SetSetting("server.configuration", JsonSerializer.Serialize(settings));

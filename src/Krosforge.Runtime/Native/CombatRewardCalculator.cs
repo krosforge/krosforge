@@ -42,6 +42,7 @@ internal sealed class CombatRewardCalculator
         if (dice is not null) this.dice = dice;
     }
     internal void Configure(ServerSettings settings) => this.settings = settings;
+    internal RewardRates Presentation => new(ServerRewardRates.Percentage(settings.ExperienceMultiplier), ServerRewardRates.Percentage(settings.DropMultiplier));
     internal CombatAward Calculate(CombatEncounter encounter, int level, int wisdom, bool victory, int prospectingScore = 100,
         int hunter = 0, IReadOnlyList<InventoryItem>? inventory = null)
     {

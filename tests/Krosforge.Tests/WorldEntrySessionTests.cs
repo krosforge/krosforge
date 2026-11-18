@@ -92,6 +92,7 @@ public sealed partial class WorldSessionTests
         Assert.Equal("Hero", humanoid.Text(5)); var player = ProtoObject.Read(humanoid.Bytes(1), 128);
         Assert.Equal((ulong)account, player.UInt64(2)); Assert.Equal(0UL, player.UInt64(7)); Assert.True(player.Has(6));
         var reference = await Event(world, "jnv", token); Assert.Equal(100UL, reference.UInt64(3)); Assert.Equal(25UL, reference.UInt64(5));
+        var rates = await Event(world, "hme", token); Assert.Equal(100UL, rates.UInt64(3)); Assert.Equal(100UL, rates.UInt64(4)); Assert.Equal(100UL, rates.UInt64(5));
     }
     [Fact]
     public void ReleasingAnOldSelectionCannotReleaseItsReplacement()

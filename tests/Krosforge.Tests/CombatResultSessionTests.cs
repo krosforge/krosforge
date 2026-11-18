@@ -35,7 +35,7 @@ public sealed partial class WorldSessionTests
             var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var session = host.Register(profile, "pt", phase => { if (phase == "disconnected") disconnected.TrySetResult(); });
             using var login = new TcpClient(); await Login(host, login, session.IssueTicket(), token);
-            using var world = await Enter(host, login, token, emptyRoster: false); await EnterMap(world, id, 100, token);
+            using var world = await Enter(host, login, token, emptyRoster: false); await EnterMap(world, id, 100, token, 250, 200);
             await Send(world, "hms", WorldProtocol.Number(2, unchecked((ulong)-30001L)), token);
             foreach (var type in new[] { "kjz", "kjy", "kjp", "jxi", "jow" }) await Event(world, type, token);
             await Send(world, "kjt", WorldProtocol.Number(1, 100), token);
@@ -64,7 +64,7 @@ public sealed partial class WorldSessionTests
                 Assert.Equal(1UL, (await Event(world, "ith", token)).UInt64(2));
                 Assert.Equal(1UL, ProtoObject.Read((await Event(world, "krg", token)).Bytes(1), 4096).UInt64(6));
                 foreach (var type in new[] { "kjy", "kjp", "jow" }) await Event(world, type, token);
-                await LoadedMap(world, 100, token);
+                await LoadedMap(world, 100, token, 250, 200);
                 // A late duplicate acknowledgement cannot produce another result or payment.
                 await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, sequence), WorldProtocol.Number(3, 1)), token);
                 await Send(world, "kne", WorldProtocol.Number(2, 1), token); await Event(world, "knb", token);
@@ -78,7 +78,7 @@ public sealed partial class WorldSessionTests
             Assert.Equal(1UL, (await Event(fresh, "ith", token)).UInt64(2));
             var restoredStatistics = ProtoObject.Read((await Event(fresh, "krg", token)).Bytes(1), 4096);
             Assert.Equal(125UL, restoredStatistics.UInt64(11)); Assert.Equal(1UL, restoredStatistics.UInt64(6));
-            await LoadedMap(fresh, 100, token);
+            await LoadedMap(fresh, 100, token, 250, 200);
             Assert.Equal(catalog.Initial, locations.LoadOrCreate(profile.Id, 290, id, catalog.Initial, catalog.Validate));
             Assert.Equal(1, new CombatOutcomeStore(root).Recover(profile.Id, 290, id));
             Assert.Equal(125, new CombatOutcomeStore(root).Read(profile.Id, 290, id).Experience);

@@ -10,6 +10,17 @@ public sealed class RewardWireTests
 {
     private static ProtoObject Read(byte[] bytes) => ProtoObject.Read(bytes, 4096);
     [Fact]
+    public void MapSnapshotPublishesConfiguredExperienceAndDropPercentagesWithoutRounding()
+    {
+        var calculator = new CombatRewardCalculator(new GroupExperienceRules([1], 5, 10), new(2.5, 2_000_000_000), new("Local", 2.55m, 0m));
+        var snapshot = new MapSnapshot(new(100, 25, new HashSet<int> { 0 }), []) { Rates = calculator.Presentation };
+        var rates = WorldEntryWire.Events(snapshot).Select(frame => Read(Read(Read(frame).Bytes(3)).Bytes(1)))
+            .Single(any => any.Text(1) == "type.ankama.com/hme");
+        var body = Read(rates.Bytes(2)); Assert.Equal(255UL, body.UInt64(3)); Assert.Equal(0UL, body.UInt64(4)); Assert.Equal(100UL, body.UInt64(5));
+        calculator.Configure(new("Local", 0m, 100m));
+        Assert.Equal(new RewardRates(0, 10000), calculator.Presentation);
+    }
+    [Fact]
     public void InstalledItemEffectsResolveManagedReferencesBeforeInventoryProjection()
     {
         var root = Environment.GetEnvironmentVariable("KROSFORGE_TEST_CLIENT");

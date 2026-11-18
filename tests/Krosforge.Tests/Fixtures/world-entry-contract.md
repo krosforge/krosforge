@@ -19,11 +19,14 @@ Static sources: original `GameAssembly.dll` SHA-256 `af866f65f0d08eebe9008ffda54
 | `jnv` | Int64 map at 3, int32 subarea at 5. |
 | `irl` | Empty auxiliary message at 3; int64 currency at 4; no item entries. |
 | `ith` | Current int64 currency balance at 2. |
+| `hme` | XP percentage 3, drop percentage 4, sharing percentage 5. |
 | `krg` | `kzv` snapshot at 1. Repeated `lae` stats at 1, next-level XP at 2, currency at 6, level-floor XP at 8, alignment at 10, current XP at 11. |
 | `lae` | Stat identity at 2; usable variant `ldw` at 1; simple variant `lgt` at 3. |
 | `ldw`, `lgt` | Usable base at 4 and used at 7; simple value at 2. |
 
 The current `Core.DataCenter.Metadata.Stat.StatId` enum has **int16** constants: HitPoints=0, ActionPoints=1, StatsPoints=3, Level=5, Vitality=11, MovementPoints=23, MaxLifePoints=95, Shield=96, HitPointLoss=97, CurPermanentDamage=102. These were read from the current enum default-value records, rather than assuming that historical semantic labels remained correct.
+
+Native `esf.zar` at `0x1818a3ce0` reads `hme` runtime offsets 0x24/0x28/0x2c. XP/drop values are narrowed to 16 bits and converted from total percentages to server-bonus percentages by subtracting 100. Server configuration therefore accepts exact hundredths up to 100× and publishes percentage integers up to 10000; zero means a minus-100-percent bonus. Sharing stays at 100. The event follows each exploration map/reference snapshot, so recreating the roleplay context or reconnecting does not restore stale rates. TCP tests verify 250/200/100 for a 2.5× XP, 2× drop world before combat, after victory and after a reset socket. Ordinary bestiary XP and base/prospecting labels still read catalog/prospecting values; publishing this message alone does not establish that those labels display custom server multipliers.
 
 For six RGB inputs 1–6, the expected indexed color stream is `818080088280801083808018848080208580802886808030`. This fixture is independent of the encoder's field lookup and packing code.
 

@@ -333,5 +333,6 @@ Saisissez « {0} » pour confirmer.</value>
   <data name="ErrorServerPresentation" xml:space="preserve"><value>Impossible de modifier le nom du serveur. Vérifiez l’installation originale et réessayez.</value></data>
   <data name="ExperienceMultiplier" xml:space="preserve"><value>Multiplicateur d’expérience</value></data>
   <data name="DropMultiplier" xml:space="preserve"><value>Multiplicateur de butin</value></data>
-  <data name="ErrorServerRates" xml:space="preserve"><value>Saisissez des multiplicateurs de 0 à 1000. La valeur 1 conserve le taux de base.</value></data>
+  <data name="ErrorServerRates" xml:space="preserve"><value>Saisissez des multiplicateurs de 0 à 100, avec deux décimales au maximum.</value></data>
+  <data name="ServerRatesHint" xml:space="preserve"><value>Utilisez 0 pour désactiver les récompenses ou 1 pour le taux de base. Maximum : 100×, avec deux décimales au maximum.</value></data>
 </root>

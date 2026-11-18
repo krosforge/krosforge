@@ -333,5 +333,6 @@ Type “{0}” to confirm.</value>
   <data name="ErrorServerPresentation" xml:space="preserve"><value>The server name could not be applied. Verify the original installation and try again.</value></data>
   <data name="ExperienceMultiplier" xml:space="preserve"><value>Experience multiplier</value></data>
   <data name="DropMultiplier" xml:space="preserve"><value>Drop multiplier</value></data>
-  <data name="ErrorServerRates" xml:space="preserve"><value>Enter multipliers from 0 to 1000. A value of 1 keeps the base rate.</value></data>
+  <data name="ErrorServerRates" xml:space="preserve"><value>Enter multipliers from 0 to 100, with up to two decimal places.</value></data>
+  <data name="ServerRatesHint" xml:space="preserve"><value>Use 0 to disable rewards or 1 for the base rate. Maximum: 100×, with up to two decimal places.</value></data>
 </root>

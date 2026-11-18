@@ -29,6 +29,7 @@ public sealed class ServerWindowTests
                 Assert.Equal(Text.Get("ConfigureServer"),dialog.Title);
                 dialog.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "ServerName").Text="São João "+language;
                 var rates = dialog.GetVisualDescendants().OfType<NumericUpDown>().ToArray();
+                Assert.All(rates, rate => Assert.Equal(ServerRewardRates.MaximumMultiplier, rate.Maximum));
                 Assert.Equal(2, rates.Length);
                 rates[0].Value = 2.5m; rates[1].Value = 3m;
                 Click(dialog,"SaveServer");

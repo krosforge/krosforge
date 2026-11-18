@@ -18,10 +18,11 @@ public sealed partial class MainWindow
         Avalonia.Automation.AutomationProperties.SetName(name, Text.Get("ServerName"));
         content.Children.Add(name);
         content.Children.Add(Label(Text.Get("ServerMode"), "muted"));
+        content.Children.Add(Label(Text.Get("ServerRatesHint"), "muted"));
         NumericUpDown Rate(string key, decimal value)
         {
             content.Children.Add(Label(Text.Get(key)));
-            var input = new NumericUpDown { Minimum = 0, Maximum = 1000, Increment = 0.5m, Value = value, IsEnabled = !active };
+            var input = new NumericUpDown { Minimum = 0, Maximum = ServerRewardRates.MaximumMultiplier, Increment = 0.5m, FormatString = "0.##", Value = value, IsEnabled = !active };
             Avalonia.Automation.AutomationProperties.SetName(input, Text.Get(key));
             content.Children.Add(input);
             return input;

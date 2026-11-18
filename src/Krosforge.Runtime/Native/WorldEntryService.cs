@@ -89,7 +89,8 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             selection.MapReady = true;
             var now = clock.GetTimestamp();
             var visible = Members(map).OrderBy(s => s.Character.Id).ToArray();
-            selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray(), AvailableEncounters(map), combat?.NeutralCalendar));
+            selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray(), AvailableEncounters(map), combat?.NeutralCalendar)
+                { Rates = rewards?.Presentation ?? new() });
             foreach (var other in visible)
                 if (other.Moving is { Announced: true } motion)
                 {

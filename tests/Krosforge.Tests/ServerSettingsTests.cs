@@ -28,6 +28,32 @@ public sealed class ServerSettingsTests : IDisposable
         Assert.False(restarted.Handle(new(Wire.Version, "configure-server-settings", Value: "malformed")).Success);
         Assert.Equal(new ServerSettings("Renamed", 2.5m, 3m), Snapshot(restarted).Server);
     }
+    [Theory]
+    [InlineData("-0.01")]
+    [InlineData("100.01")]
+    [InlineData("1000")]
+    [InlineData("0.001")]
+    public void InvalidOrUnrepresentableRatesCannotPartiallyChangeTheSavedConfiguration(string value)
+    {
+        var invalid = decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+        using var runtime = new RuntimeService(root);
+        var saved = new ServerSettings("Local", 0.01m, 100m);
+        Assert.True(runtime.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(saved))).Success);
+        foreach (var settings in new[] { new ServerSettings("Changed", invalid, 1), new("Changed", 1, invalid) })
+        {
+            var response = runtime.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(settings)));
+            Assert.False(response.Success); Assert.Equal("ErrorServerRates", response.Error);
+            Assert.Equal(saved, Snapshot(runtime).Server);
+        }
+    }
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("0.01", 1)]
+    [InlineData("1", 100)]
+    [InlineData("2.55", 255)]
+    [InlineData("100", 10000)]
+    public void SupportedRatesHaveAnExactNativePercentage(string multiplier, int expected) =>
+        Assert.Equal(expected, ServerRewardRates.Percentage(decimal.Parse(multiplier, System.Globalization.CultureInfo.InvariantCulture)));
     [Fact]
     public void DefaultAndRenameSurviveRestartWithoutChangingProfiles()
     {
