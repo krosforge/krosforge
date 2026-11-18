@@ -58,6 +58,23 @@ public sealed class CombatTurnsTests
         Assert.NotNull(battle.Cast(1, 3, 1, 128, (min, _) => min));
     }
     [Fact]
+    public void NegativeElementalResistanceIncreasesDamageWithoutOverflowing()
+    {
+        var weak = Enemy(128) with { Statistics = CombatStatistics.Empty with
+            { Resistance = ImmutableDictionary<CombatElement, int>.Empty.Add(CombatElement.Air, -50) } };
+        var battle = new CombatTurns(Board(), [Player(100, Spell()), weak]);
+        Assert.Equal(15, battle.Cast(1, 1, 1, 128, (min, _) => min)!.Damage);
+        Assert.Equal(85, battle.Fighters.Single(f => f.Id == -1).Life);
+
+        var extreme = weak with { Statistics = weak.Statistics with
+            { Resistance = weak.Statistics.Resistance.SetItem(CombatElement.Air, int.MinValue) } };
+        var powerful = Player(100, Spell() with { Damage = new(CombatElement.Air, int.MaxValue - 1, int.MaxValue - 1) })
+            with { Statistics = CombatStatistics.Empty with { Agility = int.MaxValue } };
+        var capped = new CombatTurns(Board(), [powerful, extreme]);
+        var lethal = capped.Cast(1, 1, 1, 128, (min, _) => min)!;
+        Assert.Equal(100, lethal.Damage); Assert.True(lethal.Killed);
+    }
+    [Fact]
     public void CriticalDeathAndEmptyTargetsHaveDistinctResults()
     {
         var spell = Spell() with { CriticalChance = 100, Critical = new(CombatElement.Air, 20, 20) };
