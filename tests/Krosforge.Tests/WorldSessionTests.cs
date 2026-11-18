@@ -4,7 +4,7 @@ using Krosforge.Runtime.Native;
 using Krosforge.Runtime.Native.Protocol.Protobuf;
 using Xunit;
 namespace Krosforge.Tests;
-public sealed class WorldSessionTests
+public sealed partial class WorldSessionTests
 {
     private static byte[] S(int n, string s) => WorldProtocol.Bytes(n, Encoding.UTF8.GetBytes(s));
     private static async Task<ProtoObject> Login(LocalSessionHost host, TcpClient socket, string ticket, CancellationToken token)

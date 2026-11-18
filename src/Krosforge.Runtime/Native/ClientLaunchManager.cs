@@ -50,7 +50,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                     target = await ClientPreparation.PrepareAsync(installation.Path, dataRoot, new ProgressSink(value => job.Update("preparing", value.BytesCopied, value.TotalBytes)), job.Cancellation.Token);
                 ValidatePrepared(installation.Path, target);
                 job.Cancellation.Token.ThrowIfCancellationRequested();
-                host ??= new LocalSessionHost(diagnostic: new SessionDiagnostics(dataRoot).Write);
+                host ??= new LocalSessionHost(diagnostic: new SessionDiagnostics(dataRoot).Write, characters: new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target)));
                 if (!configured)
                 {
                     await ClientLaunchConfiguration.WriteAsync(target, host.BaseUrl, job.Cancellation.Token);

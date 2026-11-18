@@ -27,6 +27,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
     private readonly TimeProvider clock;
     private readonly Func<NetworkStream, byte[], CancellationToken, Task> writeTransfer;
 
+    private readonly CharacterService? characters;
     private int nextClient;
     internal int WorldPort => ((IPEndPoint)world.LocalEndpoint).Port;
     internal int HttpPort => ((IPEndPoint)http.LocalEndpoint).Port;
@@ -34,8 +35,9 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
     internal int ConnectionPort => ((IPEndPoint)connection.LocalEndpoint).Port;
     internal string BaseUrl => $"http://127.0.0.1:{HttpPort}";
     internal LocalSessionHost(TimeSpan? authenticationTimeout = null, Action<string>? diagnostic = null, TimeProvider? clock = null,
-        Func<NetworkStream, byte[], CancellationToken, Task>? writeTransfer = null)
+        Func<NetworkStream, byte[], CancellationToken, Task>? writeTransfer = null, CharacterService? characters = null)
     {
+        this.characters = characters;
         this.diagnostic = diagnostic;
         this.clock = clock ?? TimeProvider.System;
         this.writeTransfer = writeTransfer ?? ((stream, payload, token) => WorldProtocol.Write(stream, payload, token));
@@ -128,7 +130,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
             // Each protocol bounds unauthenticated requests. Active sessions live until their
             // registration is revoked or the host shuts down, not a fixed connection age.
             try { await serve(client.GetStream(), lifetime.Token); }
-            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or ProtocolException or JsonException) { diagnostic?.Invoke("connection-ended " + e.GetType().Name); }
+            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or ProtocolException or JsonException or Microsoft.Data.Sqlite.SqliteException) { diagnostic?.Invoke("connection-ended " + e.GetType().Name); }
             finally { slots.Release(); }
         }
     }
@@ -244,7 +246,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
                     if (session is null) throw new ProtocolException("Ticket rejected.");
                     await Task.Delay(250, deadline.Token);
                     session.Token.ThrowIfCancellationRequested();
-                    payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.Accepted(session.Profile));
+                    payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.Accepted(session.Profile, characters?.Count(session.Profile.Id) ?? 0));
                 }
                 else if (request.Operation == ConnectionAuthentication.SelectRealm)
                 {

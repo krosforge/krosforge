@@ -22,7 +22,7 @@ internal static class ConnectionAuthentication
         if (ticket.Length is < 1 or > 4096) throw new ProtocolException("Ticket extent rejected.");
         return ticket;
     }
-    internal static byte[] Accepted(Profile profile)
+    internal static byte[] Accepted(Profile profile, int characterCount = 0)
     {
         var collection = new ArrayBufferWriter<byte>();
         foreach (var id in new[] { ServerPresentation.RealmId })
@@ -33,7 +33,7 @@ internal static class ConnectionAuthentication
             ProtoWriter.UInt64(descriptor, 3, 1);
             var realm = new ArrayBufferWriter<byte>();
             ProtoWriter.Bytes(realm, 1, descriptor.WrittenSpan);
-            ProtoWriter.UInt64(realm, 2, 0);
+            ProtoWriter.UInt64(realm, 2, (ulong)characterCount);
             ProtoWriter.Bytes(collection, 1, realm.WrittenSpan);
         }
         var quota = new ArrayBufferWriter<byte>();

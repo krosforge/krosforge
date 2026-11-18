@@ -12,6 +12,8 @@ internal sealed partial class LocalSessionHost
         long lease = 0;
         bool transferred = false, ready = false, returnIssued = false;
         int unsupported = 0;
+        long? pendingDeletion = null;
+        var characterWire = new CharacterWireCodec();
         using var authentication = CancellationTokenSource.CreateLinkedTokenSource(token);
         authentication.CancelAfter(authenticationTimeout);
         try
@@ -60,10 +62,30 @@ internal sealed partial class LocalSessionHost
                             transferred = true;
                             return;
                         case "ksu" when ready:
-                            body.Only(); reply = WorldProtocol.Event("ksv", []); break;
-                        case "kru" when ready: reply = WorldProtocol.Event("ksn", WorldProtocol.Number(1, 1)); break;
-                        case "kta" when ready: reply = WorldProtocol.Event("ksb", WorldProtocol.Bytes(2, [])); break;
-                        case "ksm" or "kso" when ready: reply = WorldProtocol.Event("kst", WorldProtocol.Number(1, 0)); break;
+                            body.Only(); pendingDeletion = null; reply = WorldProtocol.Event("ksv", characters is null ? [] : characterWire.List(characters.List(session.Profile.Id))); break;
+                        case "kru" when ready:
+                            pendingDeletion = null;
+                            if (characters is null) { reply = WorldProtocol.Event("ksn", characterWire.CreationResult("failure")); break; }
+                            var result = characters.Create(session.Profile.Id, characterWire.ReadCreation(request.Payload));
+                            await WorldProtocol.Write(stream, WorldProtocol.Event("ksn", characterWire.CreationResult(result)), deadline.Token);
+                            if (result != "success") continue;
+                            reply = WorldProtocol.Event("ksv", characterWire.List(characters.List(session.Profile.Id))); break;
+                        case "ktb" when ready && characters is not null:
+                            body.Only(); reply = WorldProtocol.Event("ksp", characterWire.SuggestedName(characters.Suggest())); break;
+                        case "kta" when ready: pendingDeletion = null; reply = WorldProtocol.Event("ksb", WorldProtocol.Bytes(2, [])); break;
+                        case "ksm" when ready:
+                            pendingDeletion = null;
+                            var deleteId = characterWire.DeletionPreparationId(request.Payload);
+                            if (characters is not null && characters.List(session.Profile.Id).Any(c => c.Id == deleteId))
+                            { pendingDeletion = deleteId; reply = WorldProtocol.Event("ksw", characterWire.DeletionPrepared()); }
+                            else reply = WorldProtocol.Event("kst", characterWire.DeletionRejected());
+                            break;
+                        case "kso" when ready:
+                            var confirmed = characterWire.DeletionConfirmationId(request.Payload);
+                            var pending = pendingDeletion; pendingDeletion = null;
+                            reply = characters is not null && pending == confirmed && characters.Delete(session.Profile.Id, confirmed)
+                                ? WorldProtocol.Event("ksv", characterWire.List(characters.List(session.Profile.Id)))
+                                : WorldProtocol.Event("kst", characterWire.DeletionRejected()); break;
                         case "kkc": throw new ProtocolException("No character selected.");
                         default:
                             if (!ready || ++unsupported > 128) throw new ProtocolException("Unsupported request budget exceeded.");
