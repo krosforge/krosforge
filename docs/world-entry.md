@@ -4,7 +4,7 @@ Selecting an owned character acquires an exclusive runtime selection until its g
 
 The runtime sends selection acceptance, a roleplay context, the map load, an explicitly empty inventory and initial attributes. The client then requests information for that exact map. The response contains the visible characters' persisted appearances, account identities, cells and directions. A different map identifier is rejected. [Movement and map presence](world-movement.md) extend this entry contract; combat and inventory gameplay are separate features.
 
-`Native/world-entry.json` is the versioned local configuration. Its initial location and life/AP/MP policy are reconstructed local choices, not a claim of official server behavior. Map geometry, subarea and experience thresholds are read from the hash-pinned reference installation. The managed reader uses the embedded schemas and retains only the requested map geometry; assets are neither extracted to disk nor distributed. Saved locations outside the supported map or walkable cells cause an explicit failure instead of a silent reset.
+`Native/world-entry.json` is the versioned local configuration. Its initial location and life/AP/MP policy are reconstructed local choices, not a claim of official server behavior. Surface map geometry, world coordinates, subarea and experience thresholds are read from the hash-pinned reference installation. The managed reader uses the embedded schemas and retains only the requested map geometry; assets are neither extracted to disk nor distributed. Saved locations outside the supported map or walkable cells cause an explicit failure instead of a silent reset.
 
 ## Database migration and recovery
 

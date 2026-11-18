@@ -48,7 +48,7 @@ public sealed partial class WorldSessionTests
         }
     }
     private static WorldEntryCatalog MovementCatalog(int stepMilliseconds = 50, int cancellationLeadSteps = 0, int predictionLeadMilliseconds = 0) => new(new(100, 0, 3, 1), new MovementPolicy(14, 560, stepMilliseconds) { CancellationLeadSteps = cancellationLeadSteps, PredictionLeadMilliseconds = predictionLeadMilliseconds },
-        [new(100, 200, "right", [2], 0, 0), new(200, 100, "left", [0], 2, 4)],
+        [new(100, 200, "right", 2, 0, 0), new(200, 100, "left", 0, 2, 4)],
         new(100, 25, new HashSet<int> { 0, 1, 2, 3 }), new(200, 26, new HashSet<int> { 0, 1, 2, 3 }));
     [Fact]
     public async Task ConcurrentLocationWritesCannotOverwriteTheSameRevision()

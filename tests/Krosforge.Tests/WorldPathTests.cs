@@ -44,7 +44,8 @@ public sealed class WorldPathTests
             Assert.Null(grid.Validate(0, points, 0, Policy));
         Assert.Null(grid.Validate(0, [0, 3], 8, Policy));
         Assert.Null(grid.Validate(0, [0, 3], 0, Policy with { MaximumCells = 3 }));
-        foreach (var changed in new[] { new MovementCell(1, 10, 1), new MovementCell(1, 0, 2) })
-            Assert.Null(new MovementGrid(14, [new(0, 0, 1), changed, new(2, 0, 1)]).Validate(0, [0, 2], 0, Policy));
+        Assert.Null(new MovementGrid(14, [new(0, 0, 1), new(1, 0, 2), new(2, 0, 1)]).Validate(0, [0, 2], 0, Policy));
+        Assert.Null(new MovementGrid(14, [new(0, 0, 0), new(1, 10, 0), new(2, 0, 0)]).Validate(0, [0, 2], 0, Policy));
+        Assert.NotNull(new MovementGrid(14, [new(0, 0, 1), new(1, 10, 1), new(2, 0, 1)]).Validate(0, [0, 2], 0, Policy));
     }
 }

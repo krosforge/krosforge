@@ -10,9 +10,10 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
     private readonly Dictionary<long, Selection> active = [];
     private readonly WorldEntryCatalog catalog = catalog;
     private readonly TimeProvider clock = time ?? TimeProvider.System;
-    internal sealed class Motion(WorldPath path, int[] turns, long started, TimeSpan firstStepCredit)
+    internal sealed class Motion(WorldPath path, int[] turns, long started, TimeSpan firstStepCredit, int announcementFrom = 0)
     {
         internal WorldPath Path { get; } = path;
+        internal int AnnouncementFrom { get; } = announcementFrom;
         internal int[] Turns { get; } = turns;
         internal long Started { get; } = started;
         internal bool Announced { get; set; }
@@ -92,7 +93,12 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             if (selection.Moving is { } previous && request.Map == selection.Location.MapId && request.TurningCells.SequenceEqual(previous.Turns)) return;
             var path = request.Map == selection.Location.MapId
                 ? selection.Map.Movement!.Validate(selection.Location.CellId, request.TurningCells, request.Direction, catalog.Movement) : null;
-            if (selection.Moving is not null || path is null) { Reject(selection); return; }
+            if (path is null) { Reject(selection); return; }
+            if (selection.Moving is { } moving)
+            {
+                if (!ReviseMotion(selection, moving, request, path)) Reject(selection);
+                return;
+            }
             var now = clock.GetTimestamp();
             var credit = selection.InterruptedFrom == path.Cells[1] && selection.MovementAvailableAt > now
                 ? clock.GetElapsedTime(now, selection.MovementAvailableAt) : TimeSpan.Zero;
@@ -109,13 +115,35 @@ internal sealed class WorldEntryService(CharacterService characters, LocationSto
             selection.MovementCompletion = CompleteLater(selection, motion);
         }
     }
+    private bool ReviseMotion(Selection selection, Motion previous, MovementRequest request, WorldPath path)
+    {
+        var elapsed = Elapsed(previous);
+        var reached = previous.Path.ReachedIndex(elapsed);
+        // A native request may revise the tail using the original path's origin,
+        // without jpj. The travelled prefix and the segment already in progress
+        // must stay identical; a revision grants no new time or prediction credit.
+        var protectedCells = reached + 1;
+        if (elapsed > previous.Path.ArrivalAt(reached) || previous.FirstStepCredit > TimeSpan.Zero && reached == 0)
+            protectedCells++;
+        if (path.Cells.Count <= reached + 1 || path.Cells.Count < protectedCells ||
+            !path.Cells.Take(protectedCells).SequenceEqual(previous.Path.Cells.Take(protectedCells))) return false;
+        if (path.Cells.SequenceEqual(previous.Path.Cells)) return true;
+        if (previous.FirstStepCredit > TimeSpan.Zero) path = path.ReverseFromPartialSegment(previous.FirstStepCredit);
+        StopMotion(selection);
+        var motion = new Motion(path, request.TurningCells.ToArray(), previous.Started, previous.FirstStepCredit, reached);
+        selection.Moving = motion;
+        selection.UnacknowledgedMotion = motion;
+        AnnounceMovement(selection, motion);
+        selection.MovementCompletion = CompleteLater(selection, motion);
+        return true;
+    }
     private void AnnounceMovement(Selection selection, Motion motion)
     {
         // Native movement is predicted before the reply. Delaying its echo until
         // the durable timeline catches up can overwrite a newer predicted path.
         if (motion.Announced) return;
         motion.Announced = true;
-        Broadcast(selection.Location.MapId, new ActorMoved(selection.Character.Id, motion.Path.Cells));
+        Broadcast(selection.Location.MapId, new ActorMoved(selection.Character.Id, motion.Path.Cells.Skip(motion.AnnouncementFrom).ToArray()));
     }
     private async Task CompleteLater(Selection selection, Motion motion)
     {
