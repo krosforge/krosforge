@@ -35,3 +35,9 @@ TCP coverage checks negative identities as signed int64 two's-complement varints
 ## Neutral calendar presentation
 
 The current `lov` message carries the calendar identity in field 3. The native monster tooltip reads `fka.bfaa()` through `fbm.bcki`; without the calendar event it throws before displaying the group details. The installed calendar bundle SHA-256 is `2791d7f01a597706eab8783c74b9d78970ea8d3e77be2a161877d238a5b48713`. An independent read found record 10 to be the lowest ID with no bonus entries. Choosing an empty bonus list is local policy; record identity is read from the installation. The calendar event precedes the map actors.
+
+## Controlled team initialization
+
+After participants, placement zones and the action bar, `jxh` supplies fight ID 1 (int32) and team 2 (`lln`). Team 6 is the controlled participant's team; leader 8 is its actor ID. Ordinary-team union 4 (`lkq`) contains member entries 2 (`ljc`), each with signed actor 3 and player union 5 (`llk`), name 2 and level 3. This profile has one controlled member; it does not synthesize other party members.
+
+These tags were rechecked in build 3.7.14.18 metadata. Native `fxp.biag` at `0x181e22360` invokes `fxj.bhyi` at `0x181e18ec0`; the latter reads team/leader at `lln` offsets 0x24/0x30 and publishes `bpg`. `EndTurnWidgetUI.OnFightLeaderInfoChanged` at `0x182c61b40` refreshes the ready button. `lln.cueq` at `0x180c5fcc0` requires ordinary-team union 4, so an absent team body is not a valid substitute. Omitting this update left the first preparation button without text. TCP coverage parses the fight, leader, team and member independently; native acceptance verifies the label after a fresh client/runtime start.
