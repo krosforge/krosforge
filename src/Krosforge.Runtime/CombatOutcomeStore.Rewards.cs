@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 namespace Krosforge.Runtime;
 
@@ -6,6 +7,8 @@ internal sealed record ItemAward(int Template, int Quantity, string Effects = "[
 internal sealed record InventoryItem(long Id, int Template, int Quantity, string Effects);
 internal sealed record CombatAward(long Experience, ItemAward[] Items);
 internal sealed record CharacterRewards(long Experience, InventoryItem[] Items);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+internal sealed record InventoryEffect(int Action, int Minimum, int Maximum, int Constant);
 
 internal sealed partial class CombatOutcomeStore
 {
@@ -23,9 +26,10 @@ internal sealed partial class CombatOutcomeStore
         {
             if (item is null || item.Template <= 0 || item.Quantity <= 0 || item.Effects is null || item.Effects.Length > 65536)
                 throw new ArgumentException("Invalid combat item award.");
-            using var effects = JsonDocument.Parse(item.Effects);
-            if (effects.RootElement.ValueKind != JsonValueKind.Array) throw new ArgumentException("Invalid item effects.");
-            return item with { Effects = JsonSerializer.Serialize(effects.RootElement) };
+            var effects = JsonSerializer.Deserialize<InventoryEffect[]>(item.Effects) ?? throw new ArgumentException("Invalid item effects.");
+            if (effects.Length > 128 || effects.Any(e => e is null || e.Action <= 0 || e.Maximum != 0 && e.Maximum < e.Minimum))
+                throw new ArgumentException("Invalid item effects.");
+            return item with { Effects = JsonSerializer.Serialize(effects) };
         }).GroupBy(item => (item.Template, item.Effects))
             .Select(group => new ItemAward(group.Key.Template, group.Aggregate(0, (total, item) => checked(total + item.Quantity)), group.Key.Effects))
             .OrderBy(item => item.Template).ThenBy(item => item.Effects, StringComparer.Ordinal).ToArray();

@@ -30,7 +30,8 @@ internal static class CreationDataReader
     private sealed record Node(int Level, int Flags, string Type, string Name, int Size, int Meta);
     private sealed record Type(int Class, Node[] Nodes);
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    internal static Dictionary<string, object>[] Read(string path, string hash, bool includeKeys = false, int maxOutput = 4194304, IReadOnlySet<long>? selectedKeys = null, int maxInput = 1048576)
+    internal static Dictionary<string, object>[] Read(string path, string hash, bool includeKeys = false, int maxOutput = 4194304, IReadOnlySet<long>? selectedKeys = null, int maxInput = 1048576,
+        bool resolveReferences = false)
     {
         if (maxInput is < 1 or > 4194304) throw new ArgumentOutOfRangeException(nameof(maxInput));
         SafePaths.CheckTree(Path.GetDirectoryName(path)!);
@@ -38,7 +39,7 @@ internal static class CreationDataReader
         var raw = File.ReadAllBytes(path);
         if (Convert.ToHexStringLower(SHA256.HashData(raw)) != hash) throw new InvalidDataException("Unsupported client catalog.");
         if (maxOutput is < 1 or > 67108864) throw new ArgumentOutOfRangeException(nameof(maxOutput));
-        return Serialized(Unpack(raw, maxOutput), includeKeys: includeKeys, selectedKeys: selectedKeys);
+        return Serialized(Unpack(raw, maxOutput), includeKeys: includeKeys, selectedKeys: selectedKeys, resolveReferences: resolveReferences);
     }
     internal static Dictionary<string, object>[] ReadMaps(string path, string hash, params int[] mapIds)
     {
@@ -99,7 +100,8 @@ internal static class CreationDataReader
         }
         if (dst != size) throw new InvalidDataException("LZ4 size mismatch."); return output;
     }
-    private static Dictionary<string, object>[] Serialized(byte[] bytes, IReadOnlySet<int>? maps = null, bool includeKeys = false, IReadOnlySet<long>? selectedKeys = null)
+    private static Dictionary<string, object>[] Serialized(byte[] bytes, IReadOnlySet<int>? maps = null, bool includeKeys = false, IReadOnlySet<long>? selectedKeys = null,
+        bool resolveReferences = false)
     {
         var h = new Reader(bytes); h.Big32(); h.Big32();
         if (h.Big32() != 22) throw new InvalidDataException("Unsupported serialized file.");
@@ -192,7 +194,7 @@ internal static class CreationDataReader
         {
             var id = r.I64(); var nodes = schemas[(r.Text(), r.Text(), r.Text())]; var row = new Dictionary<string, object>();
             if (!seen.Add(id)) throw new InvalidDataException("Duplicate catalog reference.");
-            var keep = wanted.Contains(id);
+            var keep = resolveReferences || wanted.Contains(id);
             for (var j = 0; j < nodes.Length; j++) if (nodes[j].Level == 1 && nodes[j].Type != "ManagedReferencesRegistry")
             {
                 var value = Value(nodes, j);
@@ -203,6 +205,20 @@ internal static class CreationDataReader
         if (r.Position != obj.Length) throw new InvalidDataException("Unconsumed catalog data.");
         if (ids.Any(id => !seen.Contains(id))) throw new InvalidDataException("Unresolved catalog reference.");
         if (includeKeys) foreach (var i in selected) refs[ids[i]].Add("$key", keys[i]);
-        return selected.Select(i => refs[ids[i]]).ToArray();
+        object Resolve(object value, HashSet<long> path, int depth)
+        {
+            if (depth > 64) throw new InvalidDataException("Catalog reference nesting rejected.");
+            if (value is object[] array) return array.Select(item => Resolve(item, path, depth + 1)).ToArray();
+            if (value is not Dictionary<string, object> fields) return value;
+            if (fields.Count == 1 && fields.TryGetValue("rid", out var identity))
+            {
+                var id = (long)identity;
+                if (id == -2) return null!; // Unity's explicit null managed-reference sentinel.
+                if (!refs.TryGetValue(id, out var target) || !path.Add(id)) throw new InvalidDataException("Unresolved or cyclic catalog reference.");
+                var resolved = Resolve(target, path, depth + 1); path.Remove(id); return resolved;
+            }
+            return fields.ToDictionary(pair => pair.Key, pair => Resolve(pair.Value, path, depth + 1));
+        }
+        return selected.Select(i => resolveReferences ? (Dictionary<string, object>)Resolve(refs[ids[i]], [ids[i]], 0) : refs[ids[i]]).ToArray();
     }
 }

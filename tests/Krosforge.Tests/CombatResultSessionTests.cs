@@ -18,9 +18,13 @@ public sealed partial class WorldSessionTests
             using var profiles = new ProfileStore(root); var profile = profiles.Create("Alpha");
             var store = new CharacterStore(root); var id = CreateCharacter(store, profile.Id, "Hero");
             var catalog = TurnWorld(); var locations = new LocationStore(root);
-            var service = new WorldEntryService(new(store, SyntheticCatalog()), locations, catalog,
-                combat: ResultEncounter(catalog), spells: ResultSpells(), outcomes: new(root));
-            await using var host = new LocalSessionHost(characters: new(store, SyntheticCatalog()), worldEntry: service);
+            var characters = new CharacterService(store, SyntheticCatalog(), catalog.Experience);
+            var encounter = ResultEncounter(catalog).Encounters.Single();
+            var combat = new CombatCatalog(catalog, encounter with { Monster = encounter.Monster with { Experience = 50 } });
+            var rewards = new CombatRewardCalculator(new([1], 5, 10), new(2.5, 2_000_000_000), new("Local", 2.5m));
+            var service = new WorldEntryService(characters, locations, catalog,
+                combat: combat, spells: ResultSpells(), outcomes: new(root), rewards: rewards);
+            await using var host = new LocalSessionHost(characters: characters, worldEntry: service);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(20)); var token = timeout.Token;
             var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -43,6 +47,10 @@ public sealed partial class WorldSessionTests
                 var player = result.Repeated(4).Select(v => ProtoObject.Read(v.Bytes, 4096))
                     .Single(v => ProtoObject.Read(v.Bytes(2), 4096).UInt64(5) == (ulong)id);
                 Assert.Equal(2UL, player.UInt64(1)); Assert.Equal(1UL, ProtoObject.Read(player.Bytes(3), 4096).UInt64(2));
+                var characterResult = ProtoObject.Read(ProtoObject.Read(player.Bytes(2), 4096).Bytes(3), 4096);
+                Assert.Equal(2UL, characterResult.UInt64(2));
+                var experience = ProtoObject.Read(ProtoObject.Read(characterResult.Repeated(1).Single().Bytes, 4096).Bytes(1), 4096);
+                Assert.Equal(125UL, experience.UInt64(3)); Assert.Equal(125UL, experience.UInt64(8)); Assert.Equal(110UL, experience.UInt64(4));
                 var summary = ProtoObject.Read((await Event(world, "jwh", token)).Bytes(2), 4096);
                 Assert.Equal(15UL, summary.UInt64(4)); Assert.Equal(1UL, summary.UInt64(7));
                 Assert.Equal(1UL, (await Event(world, "irl", token)).UInt64(4));
@@ -57,10 +65,12 @@ public sealed partial class WorldSessionTests
             using var fresh = await Enter(host, freshLogin, token, emptyRoster: false);
             await Send(fresh, "kta", WorldProtocol.Number(1, (ulong)id), token); await Event(fresh, "ksb", token);
             await Send(fresh, "kkc", [], token); await Event(fresh, "kjp", token); await Event(fresh, "jow", token);
-            Assert.Equal(1UL, (await Event(fresh, "irl", token)).UInt64(4)); await Event(fresh, "krg", token);
+            Assert.Equal(1UL, (await Event(fresh, "irl", token)).UInt64(4));
+            Assert.Equal(125UL, ProtoObject.Read((await Event(fresh, "krg", token)).Bytes(1), 4096).UInt64(11));
             await LoadedMap(fresh, 100, token);
             Assert.Equal(catalog.Initial, locations.LoadOrCreate(profile.Id, 290, id, catalog.Initial, catalog.Validate));
             Assert.Equal(1, new CombatOutcomeStore(root).Recover(profile.Id, 290, id));
+            Assert.Equal(125, new CombatOutcomeStore(root).Read(profile.Id, 290, id).Experience);
         }
         finally { Directory.Delete(root, true); }
     }

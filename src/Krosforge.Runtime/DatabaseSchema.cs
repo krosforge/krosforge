@@ -58,7 +58,7 @@ internal static class DatabaseSchema
                 character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
                 experience INTEGER NOT NULL CHECK(typeof(experience)='integer' AND experience>=0));
             CREATE TABLE character_items(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY AUTOINCREMENT CHECK(id BETWEEN 1 AND 2147483647),
                 character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
                 template_id INTEGER NOT NULL CHECK(template_id>0),
                 quantity INTEGER NOT NULL CHECK(typeof(quantity)='integer' AND quantity BETWEEN 1 AND 2147483647),
