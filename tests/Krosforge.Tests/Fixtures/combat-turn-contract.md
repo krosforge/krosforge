@@ -8,6 +8,7 @@ Native metadata/binary hashes and retained static evidence are the same as the p
 | `jst` animation acknowledgement | optional 1 actor, 2 positive sequence, 3 completed boolean |
 | `jqh` sequence open | 1 sequence type (ordinary 0), 2 actor |
 | `jsy` sequence close | 2 sequence ID, 3 type (0), 4 observing player |
+| `jnz` movement | packed cells 1, signed actor 4 (negative for monsters) |
 | `jwo` end request | empty ordinary mode |
 | `jug` turn ending / `jte` turn confirmed | empty ordinary mode |
 | `jtd` readiness | 1 boolean; optional field 2 must remain zero |
@@ -23,4 +24,4 @@ Current `StatId` has int16 underlying constants, independently read from metadat
 
 Current `SpellLevelData` getters were checked in native code: LOS at `0x1807bfa00` tests bit 2, boostable range at `0x1807bfab0` tests bit 6, and animation at `0x1807bfa80` tests bit 9. Catalog hashes are pinned in `combat-spells.json`. Independent scalar reads establish spell 13338/level 41718 costs 2 AP, ranges 0–8, uses water dice 7–9 (critical 10–12), has 5% critical chance and limits 6 per turn/3 per target. Spell 13331/41697 costs 3 AP, ranges 1–4 without LOS, uses earth dice 11–13 (critical 14–16), has 10% critical chance and limits 3/2. Unarmed 0/10461 costs 3 AP at range 1 with neutral dice 6–7 and 5% critical chance (9–10). Monster 5866/25445 costs 2 AP at range 1 with fire dice 6–10 and no critical.
 
-TCP tests cover controlled-book publication, movement cost, cast/damage envelopes, increasing acknowledgements, turn handoff, automatic damage and forfeit without overwriting exploration position. Runtime tests cover stale acknowledgements across fights, expired turns before timer execution, and disconnect on missing animation completion. Native animation and HUD acceptance remain separate PR evidence.
+TCP tests cover controlled-book publication, movement cost, cast/damage envelopes, increasing acknowledgements, turn handoff, monster movement with a negative actor followed by an acknowledged attack, automatic damage and forfeit without overwriting exploration position. Runtime tests cover stale acknowledgements across fights, expired turns before timer execution, and disconnect on missing animation completion. Native animation and HUD acceptance remain separate PR evidence.

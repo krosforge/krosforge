@@ -10,8 +10,10 @@ namespace Krosforge.Tests;
 
 public sealed partial class WorldSessionTests
 {
-    [Fact]
-    public async Task TcpCombatMovementCastAndAutomaticReplyUseAcknowledgedSequences()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TcpCombatMovementCastAndAutomaticReplyUseAcknowledgedSequences(bool monsterApproaches)
     {
         var root = Path.Combine(Path.GetTempPath(), "combat-turn-tcp-" + Guid.NewGuid().ToString("N"));
         try
@@ -19,7 +21,7 @@ public sealed partial class WorldSessionTests
             using var profiles = new ProfileStore(root); var profile = profiles.Create("Alpha");
             var store = new CharacterStore(root); var id = CreateCharacter(store, profile.Id, "Hero");
             var catalog = TurnWorld(); var locations = new LocationStore(root);
-            var service = new WorldEntryService(new(store, SyntheticCatalog()), locations, catalog, combat: TurnEncounter(catalog), spells: TurnSpells());
+            var service = new WorldEntryService(new(store, SyntheticCatalog()), locations, catalog, combat: TurnEncounter(catalog), spells: TurnSpells(monsterApproaches ? 1 : 8));
             await using var host = new LocalSessionHost(characters: new(store, SyntheticCatalog()), worldEntry: service);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(15)); var token = timeout.Token;
@@ -36,10 +38,10 @@ public sealed partial class WorldSessionTests
             await Send(world, "jxj", [8, 1], token);
             foreach (var type in new[] { "jxr", "jvu", "krg", "jvi" }) await Event(world, type, token);
             Assert.Equal((ulong)id, (await Event(world, "jvj", token)).UInt64(3));
-            // Independent turning-cell fixture: 100 -> 114 on map 100.
-            await Send(world, "jok", Convert.FromHexString("0a0264721064"), token);
+            // Independent fixtures: 100 -> 86 retreats from the monster; 100 -> 114 approaches it.
+            await Send(world, "jok", Convert.FromHexString(monsterApproaches ? "0a0264561064" : "0a0264721064"), token);
             await Event(world, "jqh", token);
-            Assert.Equal(new byte[] { 100, 114 }, (await Event(world, "jnz", token)).Bytes(1));
+            Assert.Equal(new byte[] { 100, monsterApproaches ? (byte)86 : (byte)114 }, (await Event(world, "jnz", token)).Bytes(1));
             Assert.Equal(129UL, (await Event(world, "jsq", token)).UInt64(22));
             var sequence = (await Event(world, "jsy", token)).UInt64(2); await Event(world, "krg", token);
             await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, sequence), WorldProtocol.Number(3, 1)), token);
@@ -57,6 +59,18 @@ public sealed partial class WorldSessionTests
             await Event(world, "krg", token); await Event(world, "jvi", token);
             Assert.Equal(ulong.MaxValue, (await Event(world, "jvj", token)).UInt64(3)); await Event(world, "jte", token);
             Assert.Equal(ulong.MaxValue, (await Event(world, "jqh", token)).UInt64(2));
+            if (monsterApproaches)
+            {
+                var walk = await Event(world, "jnz", token);
+                Assert.Equal(ulong.MaxValue, walk.UInt64(4));
+                Assert.NotEmpty(walk.Bytes(1));
+                Assert.Equal(129UL, (await Event(world, "jsq", token)).UInt64(22));
+                var walkSequence = await Event(world, "jsy", token);
+                Assert.Equal((ulong)id, walkSequence.UInt64(4));
+                await Event(world, "krg", token);
+                await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, walkSequence.UInt64(2)), WorldProtocol.Number(3, 1)), token);
+                Assert.Equal(ulong.MaxValue, (await Event(world, "jqh", token)).UInt64(2));
+            }
             foreach (var type in new[] { "jsq", "jsq", "jsq" }) await Event(world, type, token);
             var automatic = await Event(world, "jsy", token); Assert.Equal((ulong)id, automatic.UInt64(4));
             await Event(world, "krg", token);
@@ -74,10 +88,10 @@ public sealed partial class WorldSessionTests
     private static CombatCatalog TurnEncounter(WorldEntryCatalog world) => new(world,
         new CombatEncounter(100, -30001, 1, 3, 2, 4, 100, 128,
             new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])) { Spells = [2] }, TurnBoard()));
-    private static CombatSpellCatalog TurnSpells()
+    private static CombatSpellCatalog TurnSpells(int monsterRange = 8)
     {
         CombatSpell spell = new(1, 1, 1, 2, 1, 8, true, true, 0, new(CombatElement.Fire, 2, 2), null);
-        return new([spell], monsters: new Dictionary<int, ImmutableArray<CombatSpell>> { [2] = [spell with { Id = 2 }] });
+        return new([spell], monsters: new Dictionary<int, ImmutableArray<CombatSpell>> { [2] = [spell with { Id = 2, MaximumRange = monsterRange }] });
     }
     private static void Fight(MovementFixture fixture, WorldEntryService.Selection selection)
     {
@@ -152,6 +166,10 @@ public sealed partial class WorldSessionTests
             var any = ProtoObject.Read(ProtoObject.Read(ProtoObject.Read(bytes, 128).Bytes(3), 128).Bytes(1), 128);
             return (any.Text(1)["type.ankama.com/".Length..], ProtoObject.Read(any.Bytes(2, false), 128));
         }
+        var monsterMovement = CombatWire.Events(new FightAction(5, 8, new CombatWalk(-1, new[] { 128, 114 }), player, 1, 50));
+        var movement = Read(monsterMovement[1]);
+        Assert.Equal("jnz", movement.Type); Assert.Equal(ulong.MaxValue, movement.Body.UInt64(4));
+        Assert.Equal(new byte[] { 128, 1, 114 }, movement.Body.Bytes(1));
         var parsed = events.Select(Read).ToArray();
         Assert.Equal(new[] { "jqh", "jsq", "jsq", "jsq", "jsy", "krg" }, parsed.Select(p => p.Type));
         Assert.Equal(300UL, parsed[1].Body.UInt64(22));

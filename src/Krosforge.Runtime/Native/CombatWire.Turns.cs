@@ -57,7 +57,7 @@ internal static partial class CombatWire
         var result = new List<byte[]> { E("jqh", J(N(1, 0), N(2, action.Actor))) };
         if (action is CombatWalk movement)
         {
-            result.Add(E("jnz", WorldMovementWire.Movement(action.Actor, movement.Cells)));
+            result.Add(E("jnz", J(Packed(1, movement.Cells), N(4, action.Actor))));
             result.Add(Points(action.Actor, true, -(movement.Cells.Count - 1)));
         }
         else if (action is CombatCast cast)
