@@ -129,7 +129,8 @@ public sealed partial class WorldSessionTests
         using var f = new MovementFixture(); var (a, notices) = f.Join("Alpha");
         f.Service.Move(a, new(100, [0, 3], 0)); f.Clock.Advance(TimeSpan.FromSeconds(2)); f.Service.Cancel(a, 2);
         await a.MovementCompletion; Assert.Equal(new WorldLocation(100, 2, 0, 2), a.Location);
-        using var db = new SqliteConnection("Data Source=" + Path.Combine(f.Root, "krosforge.db")); db.Open();
+        using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+        { DataSource = Path.Combine(f.Root, "krosforge.db"), Pooling = false }.ToString()); db.Open();
         using var command = db.CreateCommand();
         command.CommandText = "CREATE TRIGGER block_location BEFORE UPDATE ON character_locations BEGIN SELECT RAISE(ABORT,'test failure'); END"; command.ExecuteNonQuery();
         var before = notices.Count;
