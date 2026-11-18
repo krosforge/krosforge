@@ -13,6 +13,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
     private LocalSessionHost? host;
     private bool configured;
     private string? appliedServerName;
+    internal bool IsActive(Guid profileId) => jobs.TryGetValue(profileId, out var job) && job.Active;
     internal bool HasActiveClients => jobs.Values.Any(job => job.Active);
     internal LaunchStatus Start(Profile profile, string source, string language, ServerSettings? server = null)
     {
@@ -49,7 +50,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                     target = await ClientPreparation.PrepareAsync(installation.Path, dataRoot, new ProgressSink(value => job.Update("preparing", value.BytesCopied, value.TotalBytes)), job.Cancellation.Token);
                 ValidatePrepared(installation.Path, target);
                 job.Cancellation.Token.ThrowIfCancellationRequested();
-                host ??= new LocalSessionHost();
+                host ??= new LocalSessionHost(diagnostic: new SessionDiagnostics(dataRoot).Write);
                 if (!configured)
                 {
                     await ClientLaunchConfiguration.WriteAsync(target, host.BaseUrl, job.Cancellation.Token);
@@ -163,7 +164,8 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
         internal Process? Process { get; set; }
         internal Task? Work { get; set; }
         internal LaunchStatus Status => Volatile.Read(ref status);
-        internal bool Active => Status.Stage is "preparing" or "starting" or "authenticating" or "server-selection";
+        private volatile bool active = true;
+        internal bool Active => active;
         internal bool CancelPreparation()
         {
             lock (gate)
@@ -189,6 +191,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
         {
             lock (gate)
             {
+                if (stage is "exited" or "failed" or "cancelled") active = false;
                 var old = status;
                 Volatile.Write(ref status, new(profileId, stage, bytes ?? old.BytesCopied, total ?? old.TotalBytes, error, old.ProcessId));
             }
