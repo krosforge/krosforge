@@ -1,0 +1,248 @@
+using Krosforge.Core;
+using Krosforge.Runtime.Native;
+using Xunit;
+namespace Krosforge.Tests;
+
+public sealed partial class WorldSessionTests
+{
+    private static MovementPolicy ShippedMovementPolicy()
+    {
+        using var resource = typeof(WorldEntryCatalog).Assembly.GetManifestResourceStream("Krosforge.Runtime.Native.world-entry.json")!;
+        using var json = System.Text.Json.JsonDocument.Parse(resource);
+        return System.Text.Json.JsonSerializer.Deserialize<MovementPolicy>(json.RootElement.GetProperty("Movement"))!;
+    }
+
+    [Fact]
+    public void NativeLongRunCanBeInterruptedAndReversedWhileAnotherAccountMoves()
+    {
+        // Use the shipped policy, not a second copy of its timing constants.
+        var policy = ShippedMovementPolicy();
+        var catalog = new WorldEntryCatalog(new(100, 87, 0, 1), policy, [],
+            new EntryMap(100, 1, Enumerable.Range(0, 560).ToHashSet()));
+        using var f = new MovementFixture(deferTimers: true, catalog: catalog);
+        var (a, notices) = f.Join("Alpha"); var (b, observer) = f.Join("Beta");
+        // Native trace: 15:59:51.2646359 -> 15:59:54.5037031, 3,239 ms.
+        // The former 170/255/150 policy still placed Alpha at 416 and rejected
+        // both this cancellation at 500 and the following path from that cell.
+        f.Service.Move(a, new(100, [87, 159, 271, 416, 500], 2));
+        var motion = a.Moving!;
+        f.Service.Move(b, new(100, [87, 88, 89, 90], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(3239));
+        f.Service.Cancel(a, 500);
+        Assert.Equal(500, a.Location.CellId);
+        Assert.Empty(notices.OfType<ActorCorrected>());
+        Assert.Equal(500, observer.OfType<ActorCorrected>().Last().Cell);
+        f.Service.Move(a, new(100, [500, 416, 315, 287], 6));
+        Assert.NotNull(a.Moving);
+        Assert.Equal(287, notices.OfType<ActorMoved>().Last(m => m.Id == a.Character.Id).Cells[^1]);
+        f.Service.Advance(a, motion); // The old timer cannot change this reversal.
+        Assert.Equal(500, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromSeconds(5));
+        f.Service.Advance(a, a.Moving!);
+        Assert.Equal(287, a.Location.CellId);
+        Assert.Empty(notices.OfType<ActorCorrected>());
+    }
+
+    [Fact]
+    public void ObservedRapidContinuationAcrossDifferentDirectionsDoesNotRewind()
+    {
+        var policy = ShippedMovementPolicy();
+        var catalog = new WorldEntryCatalog(new(100, 402, 0, 1), policy, [],
+            new EntryMap(100, 1, new HashSet<int> { 402, 401, 414, 413, 412, 411, 410 }));
+        using var f = new MovementFixture(deferTimers: true, catalog: catalog);
+        var (a, notices) = f.Join("Alpha"); var (_, observer) = f.Join("Beta");
+        // Request timing observed in 3.7.14.18. A single cell is jpj; longer
+        // arrays are jok turning points. No timer continuation is dispatched.
+        (int Milliseconds, int[] Cells)[] requests =
+        [
+            (0, [402, 401, 414, 410]), (364, [414]), (371, [414, 401, 402]),
+            (847, [401]), (855, [401, 402]), (1372, [402]),
+            (1374, [402, 401, 414, 410]), (1955, [413]), (1964, [413, 410]),
+            (2390, [411]), (2397, [411, 410]), (3089, [410, 414, 401, 402]),
+            (3739, [413]), (3747, [413, 414, 401, 402]), (4106, [401])
+        ];
+        var previous = 0;
+        foreach (var (milliseconds, cells) in requests)
+        {
+            f.Clock.Advance(TimeSpan.FromMilliseconds(milliseconds - previous)); previous = milliseconds;
+            if (cells.Length == 1)
+            {
+                f.Service.Cancel(a, cells[0]);
+                Assert.Equal(cells[0], a.Location.CellId);
+                Assert.Equal(cells[0], observer.OfType<ActorCorrected>().Last().Cell);
+            }
+            else
+            {
+                f.Service.Move(a, new(100, cells, 0));
+                Assert.NotNull(a.Moving);
+                Assert.IsType<ActorMoved>(notices[^1]);
+            }
+            Assert.Empty(notices.OfType<ActorCorrected>());
+        }
+    }
+
+    [Fact]
+    public void PredictionLeadCoversBoundarySkewWithoutGrantingCreditPerRequest()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1, predictionLeadMilliseconds: 50, stepMilliseconds: 255);
+        var (a, notices) = f.Join("Alpha"); var (_, observer) = f.Join("Beta");
+        f.Service.Move(a, new(100, [0, 3], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(150)); f.Service.Cancel(a, 1);
+        f.Service.Move(a, new(100, [1, 3], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(353)); f.Service.Cancel(a, 3);
+        // The request arrives just before the strict second-segment boundary.
+        Assert.Equal(3, a.Location.CellId); Assert.Empty(notices.OfType<ActorCorrected>());
+        Assert.Equal(3, observer.OfType<ActorCorrected>().Last().Cell);
+        f.Service.Move(a, new(100, [3, 0], 4));
+        Assert.NotNull(a.Moving); // Remaining time still fits the reversed segment.
+    }
+
+    [Fact]
+    public void RepeatedCompletedMovesCannotAccumulatePredictionLead()
+    {
+        using var f = new MovementFixture(deferTimers: true, predictionLeadMilliseconds: 50, stepMilliseconds: 255);
+        var (a, _) = f.Join("Alpha");
+        f.Service.Move(a, new(100, [0, 1], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(205)); f.Service.Move(a, new(100, [1, 2], 0));
+        Assert.Equal(1, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(205)); f.Service.Advance(a, a.Moving!);
+        Assert.Equal(1, a.Location.CellId); // A second request did not mint another 50 ms.
+        f.Clock.Advance(TimeSpan.FromMilliseconds(50)); f.Service.Move(a, new(100, [2, 3], 0));
+        Assert.Equal(2, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(254)); f.Service.Advance(a, a.Moving!);
+        Assert.Equal(2, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(1)); f.Service.Advance(a, a.Moving!);
+        Assert.Equal(3, a.Location.CellId);
+    }
+
+    [Fact]
+    public async Task InterruptionCanReconcileTheLastUnacknowledgedPathAfterItsTimerCompleted()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
+        var (a, _) = f.Join("Alpha");
+        f.Service.Move(a, new(100, [0, 3], 0)); var old = a.Moving!;
+        f.Clock.Advance(TimeSpan.FromSeconds(3)); f.Service.Advance(a, old); await a.MovementCompletion;
+        Assert.Equal(3, a.Location.CellId);
+        f.Service.Cancel(a, 2); // Interruption was sent while animation was still in progress.
+        Assert.Equal(new WorldLocation(100, 2, 0, 3), a.Location);
+        f.Service.Move(a, new(100, [2, 0], 4)); var next = a.Moving!;
+        f.Service.Acknowledge(a); f.Service.Advance(a, old);
+        Assert.Same(next, a.Moving);
+        f.Clock.Advance(TimeSpan.FromSeconds(2)); f.Service.Advance(a, next); await a.MovementCompletion;
+        f.Service.Acknowledge(a); f.Service.Cancel(a, 1);
+        Assert.Equal(new WorldLocation(100, 0, 4, 4), a.Location);
+    }
+
+    [Fact]
+    public async Task ANewActionInvalidatesTheCompletedPathsInterruptionWindow()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
+        var (a, _) = f.Join("Alpha");
+        f.Service.Move(a, new(100, [0, 3], 0)); f.Clock.Advance(TimeSpan.FromSeconds(3));
+        f.Service.Move(a, new(100, [3, 500], 0)); // Finishes the elapsed path, then rejects the next request.
+        await a.MovementCompletion;
+        f.Service.Cancel(a, 1);
+        Assert.Equal(new WorldLocation(100, 3, 0, 2), a.Location);
+    }
+
+    [Fact]
+    public async Task ReversingInsideTheActiveSegmentRetracesOnlyTheTravelledFraction()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
+        var (a, _) = f.Join("Alpha");
+        f.Service.Move(a, new(100, [0, 3], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(600)); f.Service.Cancel(a, 1);
+        f.Service.Move(a, new(100, [1, 0], 4)); var reverse = a.Moving!;
+        Assert.True(reverse.Announced); Assert.Equal(TimeSpan.FromMilliseconds(600), reverse.Path.Duration);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(300)); f.Service.Cancel(a, 0);
+        f.Service.Move(a, new(100, [0, 2], 0)); var forward = a.Moving!;
+        Assert.Equal(TimeSpan.FromMilliseconds(1700), forward.Path.Duration);
+        f.Service.Advance(a, reverse); Assert.Same(forward, a.Moving);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(1699)); f.Service.Advance(a, forward); Assert.Equal(0, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(1)); f.Service.Advance(a, forward); await a.MovementCompletion;
+        Assert.Equal(new WorldLocation(100, 2, 0, 4), a.Location);
+    }
+
+    [Fact]
+    public void CancellingOrRejectingAnUnfinishedReversalDoesNotEraseItsPartialSegment()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
+        var (a, _) = f.Join("Alpha");
+        f.Service.Move(a, new(100, [0, 3], 0)); f.Clock.Advance(TimeSpan.FromMilliseconds(200)); f.Service.Cancel(a, 1);
+        f.Service.Move(a, new(100, [1, 0], 4)); f.Clock.Advance(TimeSpan.FromMilliseconds(100));
+        f.Service.Move(a, new(100, [500, 2], 0)); // Reject while the visual position is still between 0 and 1.
+        for (var i = 0; i < 10; i++)
+        {
+            f.Service.Move(a, new(100, [1, 2], 0)); f.Service.Cancel(a, 2);
+            Assert.Equal(1, a.Location.CellId);
+        }
+        f.Service.Move(a, new(100, [1, 0], 4));
+        Assert.Equal(TimeSpan.FromMilliseconds(100), a.Moving!.Path.Duration);
+    }
+
+    [Fact]
+    public async Task RapidRedirectKeepsTheActiveSegmentAndCarriesItsRemainingTime()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
+        var (a, notices) = f.Join("Alpha"); var (_, observer) = f.Join("Beta");
+        f.Service.Move(a, new(100, [0, 3], 0)); var old = a.Moving!; var pending = a.MovementCompletion;
+        f.Clock.Advance(TimeSpan.FromMilliseconds(600));
+        f.Service.Cancel(a, 1); // Native client reports the active segment's destination.
+        Assert.Equal(new WorldLocation(100, 1, 0, 2), a.Location);
+        Assert.Equal(1, observer.OfType<ActorCorrected>().Last().Cell);
+        Assert.IsType<MovementReleased>(notices[^1]);
+        Assert.Empty(notices.OfType<ActorCorrected>()); // Preserve the owner's interpolation.
+        f.Service.Move(a, new(100, [1, 3], 0)); var redirected = a.Moving!;
+        Assert.Equal(2, observer.OfType<ActorMoved>().Count()); // Echo now, before another predicted destination.
+        Assert.Equal(new[] { 1, 2, 3 }, Assert.IsType<ActorMoved>(notices[^1]).Cells);
+        await pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        f.Service.Advance(a, old); Assert.Same(redirected, a.Moving);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(2399)); f.Service.Advance(a, redirected);
+        Assert.Equal(1, a.Location.CellId); // 400 ms remaining + 2000 ms for the next two segments.
+        Assert.Equal(new[] { 1, 2, 3 }, observer.OfType<ActorMoved>().Last().Cells);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(1)); f.Service.Advance(a, redirected);
+        await a.MovementCompletion;
+        Assert.Equal(new WorldLocation(100, 3, 0, 3), a.Location);
+        Assert.Equal(a.Location, f.Locations.LoadOrCreate(a.Profile, 290, a.Character.Id, f.Catalog.Initial, f.Catalog.Validate));
+    }
+
+    [Fact]
+    public void RepeatedCancelsCannotAccumulateLeadCellsOrSkipTimeOnMapExit()
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
+        var (a, _) = f.Join("Alpha");
+        f.Service.Move(a, new(100, [0, 3], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(1001)); f.Service.Cancel(a, 2);
+        Assert.Equal(2, a.Location.CellId);
+        f.Service.ChangeMap(a, 200); Assert.Equal(100, a.Location.MapId);
+        for (var i = 0; i < 10; i++)
+        {
+            f.Service.Move(a, new(100, [2, 3], 0)); f.Service.Cancel(a, 3);
+            Assert.Equal(2, a.Location.CellId); Assert.Null(a.Moving);
+        }
+        Assert.Equal(2, a.Location.Revision);
+        f.Clock.Advance(TimeSpan.FromMilliseconds(999)); f.Service.ChangeMap(a, 200);
+        Assert.Equal(new WorldLocation(200, 0, 0, 3), a.Location);
+    }
+
+    [Theory]
+    [InlineData("move")]
+    [InlineData("cancel")]
+    [InlineData("transition")]
+    public void InvalidRequestDuringMovementStopsAtReachedCellInsteadOfRewinding(string action)
+    {
+        using var f = new MovementFixture(deferTimers: true, cancellationLeadSteps: 1);
+        var (a, notices) = f.Join("Alpha"); var (_, observer) = f.Join("Beta");
+        f.Service.Move(a, new(100, [0, 3], 0)); f.Clock.Advance(TimeSpan.FromMilliseconds(1100));
+        switch (action)
+        {
+            case "move": f.Service.Move(a, new(100, [3, 0], 4)); break;
+            case "cancel": f.Service.Cancel(a, 3); break; // Beyond the current segment.
+            case "transition": f.Service.ChangeMap(a, 200); break;
+        }
+        Assert.Null(a.Moving); Assert.Equal(new WorldLocation(100, 1, 0, 2), a.Location);
+        Assert.Equal(1, Assert.Single(observer.OfType<ActorCorrected>()).Cell);
+        Assert.IsType<MovementReleased>(notices[^2]);
+        Assert.Equal(a.Location, f.Locations.LoadOrCreate(a.Profile, 290, a.Character.Id, f.Catalog.Initial, f.Catalog.Validate));
+    }
+}

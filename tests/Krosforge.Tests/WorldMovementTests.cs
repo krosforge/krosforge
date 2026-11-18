@@ -26,11 +26,11 @@ public sealed partial class WorldSessionTests
         internal readonly WorldEntryService Service;
         internal readonly LocationStore Locations;
         private readonly List<WorldEntryService.Selection> selections = [];
-        internal MovementFixture(bool deferTimers = false)
+        internal MovementFixture(bool deferTimers = false, int cancellationLeadSteps = 0, int predictionLeadMilliseconds = 0, int stepMilliseconds = 1000, WorldEntryCatalog? catalog = null)
         {
             Clock = new(deferTimers);
             Profiles = new(Root); Characters = new(Root); Locations = new(Root);
-            Catalog = MovementCatalog(1000);
+            Catalog = catalog ?? MovementCatalog(stepMilliseconds, cancellationLeadSteps, predictionLeadMilliseconds);
             Service = new(new CharacterService(Characters, SyntheticCatalog()), Locations, Catalog, Clock);
         }
         internal (WorldEntryService.Selection Selection, List<WorldNotice> Notices) Join(string name)
@@ -47,7 +47,7 @@ public sealed partial class WorldSessionTests
             Profiles.Dispose(); Directory.Delete(Root, true);
         }
     }
-    private static WorldEntryCatalog MovementCatalog(int stepMilliseconds = 50) => new(new(100, 0, 3, 1), new(14, 560, stepMilliseconds),
+    private static WorldEntryCatalog MovementCatalog(int stepMilliseconds = 50, int cancellationLeadSteps = 0, int predictionLeadMilliseconds = 0) => new(new(100, 0, 3, 1), new MovementPolicy(14, 560, stepMilliseconds) { CancellationLeadSteps = cancellationLeadSteps, PredictionLeadMilliseconds = predictionLeadMilliseconds },
         [new(100, 200, "right", [2], 0, 0), new(200, 100, "left", [0], 2, 4)],
         new(100, 25, new HashSet<int> { 0, 1, 2, 3 }), new(200, 26, new HashSet<int> { 0, 1, 2, 3 }));
     [Fact]
@@ -94,7 +94,6 @@ public sealed partial class WorldSessionTests
     [Theory]
     [InlineData("move")]
     [InlineData("transition")]
-    [InlineData("cancel")]
     [InlineData("invalid-move")]
     [InlineData("duplicate-move")]
     public async Task NextActionCommitsExpiredMovementBeforeValidationWithoutTimerContinuation(string action)
@@ -112,7 +111,6 @@ public sealed partial class WorldSessionTests
         {
             case "move": f.Service.Move(a, new(100, [2, 3], 0)); break;
             case "transition": f.Service.ChangeMap(a, 200); break;
-            case "cancel": f.Service.Cancel(a, 1); break;
             case "invalid-move": f.Service.Move(a, new(100, [2, 500], 0)); break;
             case "duplicate-move": f.Service.Move(a, new(100, [0, 2], 0)); break;
         }

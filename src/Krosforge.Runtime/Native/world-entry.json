@@ -20,7 +20,14 @@
   "Movement": {
     "Columns": 14,
     "MaximumCells": 560,
-    "StepMilliseconds": 200
+    "StepMilliseconds": 200,
+    "Timing": {
+      "DiagonalMilliseconds": 136,
+      "HorizontalMilliseconds": 204,
+      "VerticalMilliseconds": 120
+    },
+    "CancellationLeadSteps": 1,
+    "PredictionLeadMilliseconds": 50
   },
   "Transitions": [
     {
