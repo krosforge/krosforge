@@ -67,16 +67,21 @@ internal static partial class CombatWire
             result.Add(Action(action.Actor, 300, 2, J(B(1, []), identity, N(5, cast.Cell),
                 cast.Target is { } target ? N(6, target) : [], cast.Critical ? N(8, 1) : [])));
             result.Add(Points(action.Actor, false, -cast.Spell.Cost));
-            if (cast.Damage > 0 && cast.Target is { } victim)
+            IEnumerable<CombatEffectResult> resolved = cast.Resolved.IsDefaultOrEmpty
+                ? cast.Damage > 0 && cast.Target is { } victim ? [new CombatLifeLost(victim, cast.Spell.Damage.Element, cast.Damage, cast.Killed)] : []
+                : cast.Resolved;
+            foreach (var effect in resolved)
             {
-                var element = cast.Spell.Damage.Element;
-                var (damageAction, wireElement) = element switch
+                if (effect is CombatLifeGained gain)
+                { result.Add(Action(action.Actor, 108, 39, J(N(2, gain.Target), N(4, gain.Amount)))); continue; }
+                if (effect is not CombatLifeLost hit) throw new InvalidDataException("Unsupported resolved combat effect.");
+                var (damageAction, wireElement) = hit.Element switch
                 {
                     CombatElement.Neutral => (100, 0), CombatElement.Earth => (97, 1), CombatElement.Fire => (99, 2),
-                    CombatElement.Water => (96, 3), CombatElement.Air => (98, 4), _ => throw new ArgumentOutOfRangeException(nameof(element))
+                    CombatElement.Water => (96, 3), CombatElement.Air => (98, 4), _ => throw new ArgumentOutOfRangeException(nameof(hit.Element))
                 };
-                result.Add(Action(action.Actor, damageAction, 37, J(N(1, 0), N(4, wireElement), N(5, victim), N(6, cast.Damage))));
-                if (cast.Killed) result.Add(Action(action.Actor, 141, 3, N(2, victim)));
+                result.Add(Action(action.Actor, damageAction, 37, J(N(1, 0), N(4, wireElement), N(5, hit.Target), N(6, hit.Amount))));
+                if (hit.Killed) result.Add(Action(action.Actor, 141, 3, N(2, hit.Target)));
             }
         }
         else throw new ArgumentOutOfRangeException(nameof(action));

@@ -5,7 +5,17 @@ public enum CombatElement { Neutral, Earth, Fire, Water, Air }
 public sealed record CombatDamage(CombatElement Element, int Minimum, int Maximum);
 public sealed record CombatSpell(int Id, int LevelId, int Grade, int Cost, int MinimumRange, int MaximumRange,
     bool LineOfSight, bool Allies, int CriticalChance, CombatDamage Damage, CombatDamage? Critical,
-    int PerTurn = 0, int PerTarget = 0);
+    int PerTurn = 0, int PerTarget = 0)
+{
+    public bool InLine { get; init; }
+    public bool InDiagonal { get; init; }
+    public bool NeedsFreeCell { get; init; }
+    public bool NeedsOccupiedCell { get; init; }
+    public int Cooldown { get; init; }
+    public int InitialCooldown { get; init; }
+    public ImmutableArray<CombatEffect> Effects { get; init; } = [];
+    public ImmutableArray<CombatEffect> CriticalEffects { get; init; } = [];
+}
 public sealed record CombatStatistics(int Initiative, int Strength, int Intelligence, int Chance, int Agility,
     ImmutableDictionary<CombatElement, int> Resistance)
 {
@@ -24,17 +34,22 @@ public sealed record CombatFighter(long Id, int Team, bool Controlled, int Cell,
 public abstract record CombatAction(long Actor);
 public sealed record CombatWalk(long Actor, IReadOnlyList<int> Cells) : CombatAction(Actor);
 public sealed record CombatCast(long Actor, CombatSpell Spell, int Cell, long? Target, bool Critical,
-    int Damage, bool Killed) : CombatAction(Actor);
-public sealed record CombatSummary(long DamageDealt = 0, long DamageTaken = 0, int EnemiesDefeated = 0);
+    int Damage, bool Killed) : CombatAction(Actor)
+{
+    public ImmutableArray<CombatEffectResult> Resolved { get; init; } = [];
+}
+public sealed record CombatSummary(long DamageDealt = 0, long DamageTaken = 0, int EnemiesDefeated = 0,
+    long HealingDone = 0, long HealingReceived = 0);
 
 // The owner serializes commands and animation acknowledgements. No wall clock, network or storage lives here.
-public sealed class CombatTurns
+public sealed partial class CombatTurns
 {
     private readonly CombatBoard board;
     private readonly MovementGrid grid;
     private readonly Dictionary<long, CombatFighter> fighters;
     private readonly Dictionary<(long Actor, int Spell, long? Target), int> uses = [];
     private readonly Dictionary<long, CombatSummary> summaries = [];
+    private readonly Dictionary<(long Actor, int Spell), int> lastCast = [];
     private readonly long[] order;
     private int current;
     public IReadOnlyList<long> Order => order.ToArray();
@@ -68,8 +83,18 @@ public sealed class CombatTurns
         bool Invalid(CombatDamage damage) => !Enum.IsDefined(damage.Element) || damage.Minimum < 0 || damage.Maximum < damage.Minimum || damage.Maximum == int.MaxValue;
         if (spell.Id < 0 || spell.LevelId <= 0 || spell.Grade <= 0 || spell.Cost <= 0 || spell.MinimumRange < 0 ||
             spell.MaximumRange < spell.MinimumRange || spell.MaximumRange > 560 || spell.CriticalChance is < 0 or > 100 ||
-            spell.PerTurn < 0 || spell.PerTarget < 0 || Invalid(spell.Damage) ||
+            spell.PerTurn < 0 || spell.PerTarget < 0 || spell.Cooldown < 0 || spell.InitialCooldown < 0 ||
+            spell.NeedsFreeCell && spell.NeedsOccupiedCell || Invalid(spell.Damage) ||
             spell.CriticalChance > 0 && (spell.Critical is null || Invalid(spell.Critical))) throw new ArgumentException("Invalid combat spell.");
+        foreach (var effect in Effects(spell, false).Concat(spell.CriticalChance > 0 ? Effects(spell, true) : []))
+        {
+            if (effect is not (CombatDamageEffect or CombatHealEffect) || effect.Targets == CombatTargets.None || (effect.Targets & ~(CombatTargets.Caster | CombatTargets.Allies | CombatTargets.Enemies)) != 0 ||
+                !Enum.IsDefined(effect.Area.Shape) || effect.Area.MinimumRadius < 0 || effect.Area.Radius < effect.Area.MinimumRadius || effect.Area.Radius > 560 ||
+                effect.Area.DecreasePercent is < 0 or > 100 || effect.Area.MaximumDecreaseSteps is < 0 or > 560 ||
+                effect is CombatDamageEffect damage && Invalid(damage.Damage) ||
+                effect is CombatHealEffect heal && (heal.Minimum < 0 || heal.Maximum < heal.Minimum || heal.Maximum == int.MaxValue))
+                throw new ArgumentException("Invalid combat effect.");
+        }
     }
     private bool Owns(long actor, long serial) => !Finished && Serial == serial && Current.Id == actor && Current.Alive;
     public CombatWalk? Move(long actor, long serial, IReadOnlyList<int> turns)
@@ -91,6 +116,11 @@ public sealed class CombatTurns
         var distance = grid.Distance(fighter.Cell, cell);
         if (distance < spell.MinimumRange || distance > spell.MaximumRange || spell.LineOfSight && !Sight(fighter.Cell, cell)) return false;
         var target = fighters.Values.SingleOrDefault(f => f.Alive && f.Cell == cell);
+        var origin = grid.Coordinate(fighter.Cell); var destination = grid.Coordinate(cell);
+        var dx = destination.X - origin.X; var dy = destination.Y - origin.Y;
+        if ((spell.InLine || spell.InDiagonal) && !(spell.InLine && (dx == 0 || dy == 0) || spell.InDiagonal && Math.Abs(dx) == Math.Abs(dy)) ||
+            spell.NeedsFreeCell && (!board.Cells[cell].Walkable || target is not null) || spell.NeedsOccupiedCell && target is null ||
+            Round <= spell.InitialCooldown || lastCast.TryGetValue((actor, spell.Id), out var previous) && Round < (long)previous + spell.Cooldown) return false;
         return (spell.PerTurn == 0 || uses.Where(u => u.Key.Actor == actor && u.Key.Spell == spellId).Sum(u => u.Value) < spell.PerTurn) &&
             (spell.PerTarget == 0 || target is null || uses.GetValueOrDefault((actor, spellId, target.Id)) < spell.PerTarget);
     }
@@ -99,27 +129,26 @@ public sealed class CombatTurns
         if (!CanCast(actor, serial, spellId, cell)) return null;
         var fighter = Current; var spell = fighter.Spells.Single(s => s.Id == spellId);
         var critical = spell.CriticalChance > 0 && Roll(roll, 1, 100) <= spell.CriticalChance;
-        var effect = critical ? spell.Critical! : spell.Damage;
         var target = fighters.Values.SingleOrDefault(f => f.Alive && f.Cell == cell);
-        var damage = 0;
-        // The admitted masks exclude the caster. A cast on an empty or ineligible cell still spends AP.
-        if (target is not null && target.Id != actor && (target.Team != fighter.Team || spell.Allies))
+        var beforeFighters = fighters.ToArray(); var beforeSummaries = summaries.ToArray();
+        ImmutableArray<CombatEffectResult> resolved;
+        try
         {
-            var baseDamage = Roll(roll, effect.Minimum, effect.Maximum);
-            var powered = (long)baseDamage * Math.Max(0L, 100L + fighter.Statistics.Power(effect.Element)) / 100;
-            // Negative resistance is a weakness. Keep it signed and widen the product before capping to remaining life.
-            var resistance = target.Statistics.Resistance.GetValueOrDefault(effect.Element);
-            var resisted = (Int128)powered * Math.Max(0L, 100L - resistance) / 100;
-            damage = (int)Int128.Min(target.Life, resisted);
-            fighters[target.Id] = target with { Life = target.Life - damage };
-            var dealt = Summary(actor); var taken = Summary(target.Id);
-            summaries[actor] = dealt with { DamageDealt = checked(dealt.DamageDealt + damage),
-                EnemiesDefeated = checked(dealt.EnemiesDefeated + (target.Team != fighter.Team && damage == target.Life ? 1 : 0)) };
-            summaries[target.Id] = taken with { DamageTaken = checked(taken.DamageTaken + damage) };
+            fighters[actor] = fighter with { Ap = fighter.Ap - spell.Cost };
+            resolved = Resolve(fighter, spell, cell, critical, roll);
         }
-        fighters[actor] = fighter with { Ap = fighter.Ap - spell.Cost };
+        catch
+        {
+            // A later effect or random-source failure cannot leave a partial cast.
+            fighters.Clear(); foreach (var entry in beforeFighters) fighters.Add(entry.Key, entry.Value);
+            summaries.Clear(); foreach (var entry in beforeSummaries) summaries.Add(entry.Key, entry.Value);
+            throw;
+        }
+        var damage = resolved.OfType<CombatLifeLost>().Where(hit => hit.Target == target?.Id).Sum(hit => hit.Amount);
         var key = (actor, spellId, target?.Id); uses[key] = uses.GetValueOrDefault(key) + 1;
-        return new(actor, spell, cell, target?.Id, critical, damage, target is not null && target.Life == damage);
+        lastCast[(actor, spellId)] = Round;
+        return new(actor, spell, cell, target?.Id, critical, damage, resolved.OfType<CombatLifeLost>().Any(hit => hit.Target == target?.Id && hit.Killed))
+            { Resolved = resolved };
     }
     private static int Roll(Func<int, int, int> roll, int min, int max)
     {

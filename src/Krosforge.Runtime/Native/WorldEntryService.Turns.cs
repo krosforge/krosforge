@@ -93,10 +93,9 @@ internal sealed partial class WorldEntryService
         var actor = turns.Current;
         var opponent = turns.Fighters.Where(f => f.Alive && f.Team != actor.Team).OrderBy(f => f.Id).FirstOrDefault();
         if (opponent is null) return;
-        foreach (var spell in actor.Spells)
+        if (turns.AutomaticCast() is { } automatic)
         {
-            if (!turns.CanCast(actor.Id, turns.Serial, spell.Id, opponent.Cell)) continue;
-            var cast = turns.Cast(actor.Id, turns.Serial, spell.Id, opponent.Cell, Roll)!;
+            var cast = turns.Cast(actor.Id, turns.Serial, automatic.Spell, automatic.Cell, Roll)!;
             PublishAction(selection, fight, cast); return;
         }
         var path = turns.Approach(actor.Id, turns.Serial, opponent.Cell);
