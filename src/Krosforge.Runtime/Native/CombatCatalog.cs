@@ -6,6 +6,7 @@ namespace Krosforge.Runtime.Native;
 
 internal sealed record CombatMonster(int Definition, int Grade, int Level, int Life, int ActionPoints, int MovementPoints, EntityLookWire Look)
 {
+    internal long Experience { get; init; }
     internal CombatStatistics Statistics { get; init; } = CombatStatistics.Empty;
     internal ImmutableArray<int> Spells { get; init; } = [];
 }
@@ -50,6 +51,7 @@ internal sealed class CombatCatalog
                 new(definition.MonsterId, definition.Grade, Number(grade, "level"), Number(grade, "lifePoints"),
                     Number(grade, "actionPoints"), Number(grade, "movementPoints"), ParseLook((string)monster["look"]))
                 {
+                    Experience = Convert.ToInt64(grade["xp"], CultureInfo.InvariantCulture),
                     Statistics = CombatSpellCatalog.Statistics(grade),
                     Spells = ((object[])((Dictionary<string, object>)monster["spells"]).Single().Value)
                         .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToImmutableArray()

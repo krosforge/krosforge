@@ -103,6 +103,35 @@ public sealed class DatabaseMigrationTests : IDisposable
         Assert.Equal(0L, Scalar(db, "SELECT COUNT(*) FROM combat_outcomes"));
     }
     [Fact]
+    public void SchemaThreeUpgradePreservesCommittedFightsAndBacksUpBeforeAddingRewards()
+    {
+        using (var profiles = new ProfileStore(root)) { }
+        using var db = Open();
+        Execute(db, """
+            INSERT INTO profiles VALUES('11111111-1111-1111-1111-111111111111','Alpha','ALPHA',7);
+            INSERT INTO characters VALUES(42,'11111111-1111-1111-1111-111111111111',290,'Hero','HERO','{}');
+            INSERT INTO character_wallets VALUES(42,7);
+            INSERT INTO combat_outcomes VALUES('fight',42,-2,100,10,1,'victory',7,100);
+            DROP TABLE combat_awards; DROP TABLE character_items; DROP TABLE character_progression;
+            PRAGMA user_version=3;
+            """);
+        Assert.Throws<IOException>(() => DatabaseSchema.Initialize(db, root, () => throw new IOException("Interrupted")));
+        Assert.Equal(3L, Scalar(db, "PRAGMA user_version"));
+        Assert.Equal(0L, Scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE name='character_items'"));
+        Assert.Equal(7L, Scalar(db, "SELECT balance FROM character_wallets"));
+        var backupPath = Assert.Single(Directory.GetFiles(Path.Combine(root, "backups"), "*.db"));
+        using (var backup = Open(backupPath))
+        {
+            Assert.Equal(3L, Scalar(backup, "PRAGMA user_version"));
+            Assert.Equal("victory", Scalar(backup, "SELECT status FROM combat_outcomes"));
+        }
+        DatabaseSchema.Initialize(db, root);
+        Assert.Equal((long)DatabaseSchema.Current, Scalar(db, "PRAGMA user_version"));
+        Assert.Equal(7L, Scalar(db, "SELECT balance FROM character_wallets"));
+        Assert.Equal(7L, Scalar(db, "SELECT reward FROM combat_outcomes"));
+        Assert.Equal(0L, Scalar(db, "SELECT COUNT(*) FROM character_progression"));
+    }
+    [Fact]
     public void FutureSchemaIsRejectedWithoutChangingJournalOrContents()
     {
         using var db = Legacy(); Execute(db, "PRAGMA user_version=999; PRAGMA journal_mode=DELETE;");

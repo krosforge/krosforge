@@ -2,7 +2,13 @@ using System.Text.Json;
 using Krosforge.Core;
 namespace Krosforge.Runtime.Native;
 
-internal sealed record EntryAttributes(int Life, int ActionPoints, int MovementPoints, long NextLevelExperience);
+internal sealed record EntryAttributes(int Life, int ActionPoints, int MovementPoints, long NextLevelExperience)
+{
+    public int Energy { get; init; } = 10000;
+    public int Prospecting { get; init; } = 100;
+    public long Experience { get; init; }
+    public long ExperienceFloor { get; init; }
+}
 internal sealed record EntryMap(long Id, int Subarea, IReadOnlySet<int> WalkableCells)
 {
     internal MovementGrid? Movement { get; init; }
@@ -13,9 +19,11 @@ internal sealed class WorldEntryCatalog
 {
     private sealed record Configuration(string Build, string GeometryBundle, string GeometryHash,
         string InformationBundle, string InformationHash, string ExperienceBundle, string ExperienceHash,
-        WorldLocation Initial, EntryAttributes Attributes, MovementPolicy Movement, int WorldMap, SurfaceMapDefinition[] SurfaceMaps);
+        WorldLocation Initial, EntryAttributes Attributes, MovementPolicy Movement, int WorldMap, SurfaceMapDefinition[] SurfaceMaps,
+        int MaximumCharacterLevel);
     internal WorldLocation Initial { get; }
     internal EntryAttributes Attributes { get; }
+    internal ExperienceCurve Experience { get; }
     internal MovementPolicy Movement { get; }
     private readonly Dictionary<(long Source, long Destination, int Cell), MapTransition> transitions;
     internal IReadOnlyCollection<MapTransition> Transitions => transitions.Values;
@@ -34,6 +42,17 @@ internal sealed class WorldEntryCatalog
             Movement.CancellationLeadSteps is < 0 or > 1 || Movement.PredictionLeadMilliseconds is < 0 or > 100 || Movement.Timing is not { IsValid: true })
             throw new InvalidDataException("Invalid movement configuration.");
         var experience = CreationDataReader.Read(Path.Combine(root, config.ExperienceBundle), config.ExperienceHash, includeKeys: true);
+        if (config.MaximumCharacterLevel is < 2 or > 1000) throw new InvalidDataException("Invalid maximum character level.");
+        var levels = experience.Where(row => (long)row["$key"] <= config.MaximumCharacterLevel).OrderBy(row => (long)row["$key"]).ToArray();
+        if (!levels.Select(row => (long)row["$key"]).SequenceEqual(Enumerable.Range(1, config.MaximumCharacterLevel).Select(n => (long)n)))
+            throw new InvalidDataException("Missing experience thresholds.");
+        Experience = new(levels.Select(row =>
+        {
+            var value = (double)row["experiencePoints"];
+            if (!double.IsFinite(value) || value < 0 || value >= long.MaxValue || Math.Truncate(value) != value)
+                throw new InvalidDataException("Invalid experience threshold.");
+            return checked((long)value);
+        }));
         var next = (double)experience.Single(row => (long)row["$key"] == 2)["experiencePoints"];
         if (!double.IsFinite(next) || next <= 0 || next >= long.MaxValue || Math.Truncate(next) != next)
             throw new InvalidDataException("Invalid experience threshold.");
@@ -66,7 +85,7 @@ internal sealed class WorldEntryCatalog
     internal WorldEntryCatalog(WorldLocation initial, params EntryMap[] maps) : this(initial, new(14, 560, 200), [], maps) { }
     internal WorldEntryCatalog(WorldLocation initial, MovementPolicy movement, MapTransition[] transitions, params EntryMap[] maps)
     {
-        Initial = initial; Attributes = new(100, 6, 3, 110); Movement = movement; this.transitions = transitions.ToDictionary(t => (t.Source, t.Destination, t.ExitCell));
+        Initial = initial; Attributes = new(100, 6, 3, 110); Experience = new([0, 110]); Movement = movement; this.transitions = transitions.ToDictionary(t => (t.Source, t.Destination, t.ExitCell));
         this.maps = maps.ToDictionary(m => m.Id, m => m with { Movement = m.Movement ?? new(movement.Columns, m.WalkableCells.Select(id => new MovementCell(id, 0, 1))) });
         Validate(initial);
     }

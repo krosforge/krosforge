@@ -12,6 +12,23 @@ public sealed class ServerSettingsTests : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "server-settings-" + Guid.NewGuid().ToString("N"));
     [Fact]
+    public void RewardRatesPersistTogetherAndLegacyRenamePreservesThem()
+    {
+        using (var runtime = new RuntimeService(root))
+        {
+            Assert.Equal(new ServerSettings("Krosforge"), Snapshot(runtime).Server);
+            var settings = new ServerSettings("Local", 2.5m, 3m);
+            Assert.True(runtime.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(settings))).Success);
+            Assert.True(runtime.Handle(new(Wire.Version, "configure-server", Value: "Renamed")).Success);
+        }
+        using var restarted = new RuntimeService(root);
+        Assert.Equal(new ServerSettings("Renamed", 2.5m, 3m), Snapshot(restarted).Server);
+        foreach (var invalid in new[] { new ServerSettings("Invalid", -1m, 1m), new("Invalid", 1m, 1001m) })
+            Assert.False(restarted.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(invalid))).Success);
+        Assert.False(restarted.Handle(new(Wire.Version, "configure-server-settings", Value: "malformed")).Success);
+        Assert.Equal(new ServerSettings("Renamed", 2.5m, 3m), Snapshot(restarted).Server);
+    }
+    [Fact]
     public void DefaultAndRenameSurviveRestartWithoutChangingProfiles()
     {
         Guid id;
@@ -39,6 +56,7 @@ public sealed class ServerSettingsTests : IDisposable
         var response = runtime.Handle(new(Wire.Version, "configure-server", Value: "Changed"));
         Assert.False(response.Success);
         Assert.Equal("ErrorCloseGameFirst", response.Error);
+        Assert.Equal("ErrorCloseGameFirst", runtime.Handle(new(Wire.Version, "configure-server-settings", Value: "{}")).Error);
         Assert.Equal("Krosforge", Snapshot(runtime).Server!.Name);
     }
     [Theory]

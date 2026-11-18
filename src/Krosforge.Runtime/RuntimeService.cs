@@ -1,5 +1,6 @@
 using Krosforge.Contracts;
 using Krosforge.Runtime.Native;
+using System.Text.Json;
 namespace Krosforge.Runtime;
 
 public sealed class RuntimeService : IDisposable
@@ -31,8 +32,17 @@ public sealed class RuntimeService : IDisposable
                 case "configure-server":
                     if (HasActiveClients) return Response.Fail("ErrorCloseGameFirst");
                     var name = Krosforge.Core.ServerName.Normalize(request.Value ?? "");
-                    store.SetSetting("server.name", name);
-                    return Response.Ok(new ServerSettings(name));
+                    var renamed = Server() with { Name = name };
+                    SaveServer(renamed);
+                    return Response.Ok(renamed);
+                case "configure-server-settings":
+                    if (HasActiveClients) return Response.Fail("ErrorCloseGameFirst");
+                    ServerSettings settings;
+                    try { settings = JsonSerializer.Deserialize<ServerSettings>(request.Value ?? "") ?? throw new ArgumentException("ErrorServerRates"); }
+                    catch (JsonException) { throw new ArgumentException("ErrorServerRates"); }
+                    settings = ValidateServer(settings);
+                    SaveServer(settings);
+                    return Response.Ok(settings);
                 case "installation":
                     var selected = ClientInstallation.Inspect(request.Value ?? "");
                     store.SetSetting("installation", selected.Path);
@@ -63,7 +73,20 @@ public sealed class RuntimeService : IDisposable
             return Response.Fail(error.Message);
         }
     }
-    private ServerSettings Server() => new(Krosforge.Core.ServerName.Normalize(store.Setting("server.name") ?? "Krosforge"));
+    private ServerSettings Server()
+    {
+        var saved = store.Setting("server.configuration");
+        if (saved is null) return new(Krosforge.Core.ServerName.Normalize(store.Setting("server.name") ?? "Krosforge"));
+        try { return ValidateServer(JsonSerializer.Deserialize<ServerSettings>(saved) ?? throw new InvalidDataException("ErrorServerRates")); }
+        catch (JsonException) { throw new InvalidDataException("ErrorServerRates"); }
+    }
+    private static ServerSettings ValidateServer(ServerSettings settings)
+    {
+        if (settings.ExperienceMultiplier is < 0 or > 1000 || settings.DropMultiplier is < 0 or > 1000)
+            throw new ArgumentException("ErrorServerRates");
+        return settings with { Name = Krosforge.Core.ServerName.Normalize(settings.Name ?? "") };
+    }
+    private void SaveServer(ServerSettings settings) => store.SetSetting("server.configuration", JsonSerializer.Serialize(settings));
     private static Guid RequireId(Request r) => r.ProfileId is { } id && id != Guid.Empty ? id : throw new ArgumentException("ErrorInvalidProfile");
     private void Cleanup()
     {

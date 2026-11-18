@@ -4,8 +4,14 @@ namespace Krosforge.Runtime.Native;
 internal sealed record CombatTiming(int TurnMilliseconds = 30000, int AnimationMilliseconds = 15000,
     int ReadyMilliseconds = 5000, int AutomaticMilliseconds = 250);
 internal sealed record FightTurn(CombatFighter Player, int Level, long NextExperience, long Actor, int Round,
-    int Order, int Milliseconds, bool Confirmed) : WorldNotice;
-internal sealed record FightAction(long Observer, int Sequence, CombatAction Action, CombatFighter Player, int Level, long NextExperience) : WorldNotice;
+    int Order, int Milliseconds, bool Confirmed) : WorldNotice
+{
+    internal EntryAttributes? Attributes { get; init; }
+}
+internal sealed record FightAction(long Observer, int Sequence, CombatAction Action, CombatFighter Player, int Level, long NextExperience) : WorldNotice
+{
+    internal EntryAttributes? Attributes { get; init; }
+}
 internal sealed record FightTurnEnding : WorldNotice;
 internal sealed record FightActionRejected : WorldNotice;
 
@@ -36,7 +42,7 @@ internal sealed partial class WorldEntryService
         fight.AutomaticAt = After(combatTiming.AutomaticMilliseconds);
         fight.EndRequested = false; fight.AwaitingReady = false;
         selection.Emit(new FightTurn(turns.Fighters.Single(f => f.Controlled), selection.Character.Level,
-            selection.Attributes.NextLevelExperience, turns.Current.Id, turns.Round, turns.OrderIndex, combatTiming.TurnMilliseconds, confirmed));
+            selection.Attributes.NextLevelExperience, turns.Current.Id, turns.Round, turns.OrderIndex, combatTiming.TurnMilliseconds, confirmed) { Attributes = selection.Attributes });
     }
     private async Task RunCombatClock(Selection selection, FightSession fight)
     {
@@ -130,7 +136,7 @@ internal sealed partial class WorldEntryService
         if (fight.Turns!.Finished && outcomes is not null) CommitCombat(selection, fight, false);
         fight.Sequence = checked(++lastCombatSequence); fight.AnimationDeadline = After(combatTiming.AnimationMilliseconds);
         selection.Emit(new FightAction(selection.Character.Id, fight.Sequence.Value, action,
-            fight.Turns!.Fighters.Single(f => f.Controlled), selection.Character.Level, selection.Attributes.NextLevelExperience));
+            fight.Turns!.Fighters.Single(f => f.Controlled), selection.Character.Level, selection.Attributes.NextLevelExperience) { Attributes = selection.Attributes });
     }
     internal void CombatAcknowledge(Selection selection, int sequence)
     {

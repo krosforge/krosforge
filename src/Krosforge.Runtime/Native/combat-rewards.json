@@ -1,0 +1,18 @@
+{
+  "Build": "3.7.14.18",
+  "Source": {
+    "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_luaformulasdataroot.asset.bundle",
+    "Sha256": "dce961d2a2673c1b76b24d0579fd0120550cfbc83827418a0a37a3cc5d095f03",
+    "Formulas": {
+      "99": "10b832ae6b0e0b9733310defcddca251102a5d542406b8e44bc030a08c5cebee",
+      "100": "330b9a98d2eb523d2ab93e303e2e7c50a87624b5dbe4b582a4203ea69aa1460e",
+      "106": "eed6e7fe112bba59879d08744686ac2de11000bec8525cbdde4111f22553ccc2"
+    }
+  },
+  "Group": {
+    "Bonuses": [1, 1.1, 1.5, 2.3, 3.1, 3.6, 4.2, 4.7, 5.15, 5.55, 5.9, 6.2],
+    "LowerTolerance": 5,
+    "UpperTolerance": 10
+  },
+  "Player": { "MonsterLevelCap": 2.5, "MaximumExperience": 2000000000 }
+}

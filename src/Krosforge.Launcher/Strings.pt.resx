@@ -331,4 +331,7 @@ Digite “{0}” para confirmar.</value>
   <data name="SaveServer" xml:space="preserve"><value>Salvar</value></data>
   <data name="ErrorServerName" xml:space="preserve"><value>Digite um nome com 1–40 caracteres, sem caracteres de controle ou sinais &lt; e &gt;.</value></data>
   <data name="ErrorServerPresentation" xml:space="preserve"><value>Não foi possível aplicar o nome do servidor. Verifique a instalação original e tente novamente.</value></data>
+  <data name="ExperienceMultiplier" xml:space="preserve"><value>Multiplicador de experiência</value></data>
+  <data name="DropMultiplier" xml:space="preserve"><value>Multiplicador de drops</value></data>
+  <data name="ErrorServerRates" xml:space="preserve"><value>Digite multiplicadores de 0 a 1000. O valor 1 mantém a taxa base.</value></data>
 </root>

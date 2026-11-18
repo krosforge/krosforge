@@ -74,6 +74,32 @@ public sealed class CombatOutcomeStorageTests : IDisposable
 
 public sealed partial class WorldSessionTests
 {
+    [Fact]
+    public void VictoryAwardsScaledExperienceAndRestoresLevelAndStatisticsAfterReconnect()
+    {
+        var rewardCalculator = new CombatRewardCalculator(new([1], 5, 10), new(2.5, 2_000_000_000), new("Local", 2.5m));
+        CombatCatalog Encounters(WorldEntryCatalog world)
+        {
+            var e = ResultEncounter(world).Encounters.Single();
+            return new(world, e with { Monster = e.Monster with { Experience = 50 } });
+        }
+        using var f = new MovementFixture(deferTimers: true, catalog: TurnWorld(), combat: Encounters,
+            spells: ResultSpells(), outcomes: true, rewards: rewardCalculator);
+        var (selected, notices) = f.Join("Alpha"); Fight(f, selected);
+        f.Service.Cast(selected, 1, 128);
+        Assert.Equal(125, selected.Rewards.Experience); Assert.Equal(2, selected.Character.Level);
+        var sequence = selected.Fight!.Sequence!.Value;
+        f.Service.CombatAcknowledge(selected, sequence); f.Service.CombatAcknowledge(selected, sequence);
+        var result = Assert.Single(notices.OfType<FightCompleted>());
+        Assert.Equal(125, result.Receipt.Award.Experience);
+        selected.Dispose();
+        using var restored = f.Service.Select(selected.Profile, selected.Account, new object(), selected.Character.Id)!;
+        Assert.Equal(125, restored.Rewards.Experience); Assert.Equal(2, restored.Character.Level);
+        var stats = ProtoObject.Read(ProtoObject.Read(WorldEntryWire.Statistics(restored), 128).Bytes(1), 128);
+        Assert.Equal(125UL, stats.UInt64(11)); Assert.Equal(110UL, stats.UInt64(8));
+        var roster = new CharacterService(f.Characters, SyntheticCatalog(), f.Catalog.Experience).List(selected.Profile);
+        Assert.Equal(2, Assert.Single(roster).Level);
+    }
     private static CombatCatalog ResultEncounter(WorldEntryCatalog world) => new(world,
         TurnEncounter(world).Encounters.Single() with { Reward = new(1, true) });
     private static CombatSpellCatalog ResultSpells(bool monsterWins = false)

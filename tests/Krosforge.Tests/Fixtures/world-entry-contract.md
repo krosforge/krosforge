@@ -27,3 +27,7 @@ The current `Core.DataCenter.Metadata.Stat.StatId` enum has **int16** constants:
 For six RGB inputs 1–6, the expected indexed color stream is `818080088280801083808018848080208580802886808030`. This fixture is independent of the encoder's field lookup and packing code.
 
 The initial map and its cells are read from the separately installed, hash-pinned bundles. The test fixture contains no map geometry or native assets. Initial life/AP/MP are an explicit local configuration; XP thresholds come from the local catalog. None of these assertions alone establishes visual acceptance in the native client.
+
+## Bestiary attribute dependencies
+
+In the same pinned build, `BestiaryTabUI.UpdateAggroTexture` at VA `0x1815605b0` requests StatId 29 (`EnergyPoints`) before binding aggression indicators. `BestiaryTabUI.GetFinalDropCoeff` at VA `0x181555a40` requests StatId 48 (`MagicFind`) and subtracts the base 100 before evaluating the prospecting bonus. Both accesses dereference the returned entry; omitting the entries interrupts row binding. The roleplay snapshot therefore supplies energy and prospecting from the configured base attributes. Monster names, grades, families, statistics and drop definitions continue to come from the separately installed catalogs. TCP assertions verify these two numeric entries; native visual acceptance is a separate check.

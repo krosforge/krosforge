@@ -11,6 +11,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
     private readonly ConcurrentDictionary<Guid, LaunchJob> jobs = new();
     private readonly SemaphoreSlim preparation = new(1);
     private LocalSessionHost? host;
+    private CombatRewardCalculator? rewards;
     private SessionDiagnostics? diagnostics;
     private bool configured;
     private string? appliedServerName;
@@ -55,14 +56,16 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                 job.Cancellation.Token.ThrowIfCancellationRequested();
                 if (host is null)
                 {
-                    var characters = new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target));
                     var world = new WorldEntryCatalog(target);
+                    var characters = new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target), world.Experience);
                     var encounters = new CombatCatalog(target, world);
+                    rewards = new CombatRewardCalculator(target, server);
                     diagnostics ??= new SessionDiagnostics(dataRoot);
                     host = new LocalSessionHost(diagnostic: diagnostics.Write, characters: characters,
                         worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), world, combat: encounters,
-                            spells: new CombatSpellCatalog(target), outcomes: new CombatOutcomeStore(dataRoot)));
+                            spells: new CombatSpellCatalog(target), outcomes: new CombatOutcomeStore(dataRoot), rewards: rewards));
                 }
+                rewards!.Configure(server);
                 if (!configured)
                 {
                     await ClientLaunchConfiguration.WriteAsync(target, host.BaseUrl, job.Cancellation.Token);

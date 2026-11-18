@@ -4,7 +4,10 @@ using Microsoft.Data.Sqlite;
 namespace Krosforge.Runtime;
 
 internal sealed record CharacterAppearance(int Version, string Build, int Breed, int Gender, int Head, int Body, int[] Colors);
-internal sealed record CharacterRecord(long Id, string Name, CharacterAppearance Appearance);
+internal sealed record CharacterRecord(long Id, string Name, CharacterAppearance Appearance)
+{
+    internal long Experience { get; init; }
+}
 internal enum CharacterCreationResult { Success, Failure, NameUnavailable, Full }
 
 // Every operation owns its connection. SQLite serializes durable writes across profiles.
@@ -24,13 +27,17 @@ internal sealed class CharacterStore(string directory)
     internal CharacterRecord[] List(Guid profile, int realm)
     {
         using var db = Open(); using var c = Scope(db, profile, realm);
-        c.CommandText = "SELECT id,name,appearance FROM characters WHERE profile_id=$profile AND realm_id=$realm ORDER BY id";
+        c.CommandText = """
+            SELECT c.id,c.name,c.appearance,COALESCE(p.experience,0)
+            FROM characters c LEFT JOIN character_progression p ON p.character_id=c.id
+            WHERE c.profile_id=$profile AND c.realm_id=$realm ORDER BY c.id
+            """;
         using var rows = c.ExecuteReader(); var result = new List<CharacterRecord>();
         while (rows.Read())
         {
             var appearance = JsonSerializer.Deserialize<CharacterAppearance>(rows.GetString(2)) ?? throw new InvalidDataException("Invalid character appearance.");
             if (appearance.Version != 1 || appearance.Build != ClientInstallation.SupportedBuild || appearance.Colors is not { Length: 6 }) throw new InvalidDataException("Unsupported character appearance.");
-            result.Add(new(rows.GetInt64(0), rows.GetString(1), appearance));
+            result.Add(new(rows.GetInt64(0), rows.GetString(1), appearance) { Experience = rows.GetInt64(3) });
         }
         return result.ToArray();
     }

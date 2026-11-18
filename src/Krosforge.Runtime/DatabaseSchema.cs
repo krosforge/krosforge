@@ -3,7 +3,7 @@ namespace Krosforge.Runtime;
 
 internal static class DatabaseSchema
 {
-    internal const int Current = 3;
+    internal const int Current = 4;
 
     internal static void Initialize(SqliteConnection db, string directory, Action? beforeCommit = null)
     {
@@ -36,7 +36,7 @@ internal static class DatabaseSchema
                 revision INTEGER NOT NULL CHECK(revision>0));
             PRAGMA user_version=2;
             """, transaction);
-        Execute(db, """
+        if (version < 3) Execute(db, """
             CREATE TABLE character_wallets(
                 character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
                 balance INTEGER NOT NULL CHECK(typeof(balance)='integer' AND balance>=0));
@@ -52,6 +52,23 @@ internal static class DatabaseSchema
                 duration_ms INTEGER NOT NULL CHECK(duration_ms>=0));
             CREATE UNIQUE INDEX combat_active_character ON combat_outcomes(character_id) WHERE status='active';
             PRAGMA user_version=3;
+            """, transaction);
+        Execute(db, """
+            CREATE TABLE character_progression(
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                experience INTEGER NOT NULL CHECK(typeof(experience)='integer' AND experience>=0));
+            CREATE TABLE character_items(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                template_id INTEGER NOT NULL CHECK(template_id>0),
+                quantity INTEGER NOT NULL CHECK(typeof(quantity)='integer' AND quantity BETWEEN 1 AND 2147483647),
+                effects TEXT NOT NULL,
+                UNIQUE(character_id,template_id,effects));
+            CREATE TABLE combat_awards(
+                outcome_id TEXT PRIMARY KEY REFERENCES combat_outcomes(id) ON DELETE CASCADE,
+                experience INTEGER NOT NULL CHECK(typeof(experience)='integer' AND experience>=0),
+                items TEXT NOT NULL);
+            PRAGMA user_version=4;
             """, transaction);
         beforeCommit?.Invoke();
         transaction.Commit();

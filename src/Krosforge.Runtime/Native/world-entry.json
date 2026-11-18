@@ -1,5 +1,6 @@
 {
   "Build": "3.7.14.18",
+  "MaximumCharacterLevel": 200,
   "GeometryBundle": "Dofus_Data/StreamingAssets/Content/Map/Data/mapdata_assets_world_587.bundle",
   "GeometryHash": "6806b94ebbfc904e0ba3f906942593819c49cf9db068ceeba1dd693d714f89ee",
   "InformationBundle": "Dofus_Data/StreamingAssets/Content/Data/data_assets_mapsinformationdataroot.asset.bundle",
@@ -15,7 +16,9 @@
   "Attributes": {
     "Life": 100,
     "ActionPoints": 6,
-    "MovementPoints": 3
+    "MovementPoints": 3,
+    "Energy": 10000,
+    "Prospecting": 100
   },
   "Movement": {
     "Columns": 14,

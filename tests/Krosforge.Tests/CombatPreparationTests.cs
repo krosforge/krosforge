@@ -56,6 +56,13 @@ public sealed class CombatPreparationTests
         Assert.Equal(3270, e.Monster.Definition); Assert.Equal(1, e.Monster.Grade); Assert.Equal(1, e.Monster.Level);
         Assert.Equal(15, e.Monster.Life); Assert.Equal(2, e.Monster.ActionPoints); Assert.Equal(3, e.Monster.MovementPoints);
         Assert.Equal(3253, e.Monster.Look.BoneId);
+        Assert.Equal(50, e.Monster.Experience);
+        Assert.Equal(2, world.Experience.At(110).Level);
+        var rewards = new CombatRewardCalculator(root!, new("Local", 2.5m));
+        Assert.Equal(125, rewards.Calculate(e, 1, 0, true).Experience);
+        Assert.Equal(0, rewards.Calculate(e, 1, 0, false).Experience);
+        rewards.Configure(new("Local", 0m));
+        Assert.Equal(0, rewards.Calculate(e, 1, 0, true).Experience);
         Assert.NotNull(world.Map(e.Map).Movement!.Approach(world.Initial.CellId, e.GroupCell, e.AttackDistance, world.Movement));
     }
 }

@@ -58,6 +58,10 @@ public sealed partial class WorldSessionTests
             Assert.Equal(100UL, ProtoObject.Read(entries[95].Bytes(3), 128).UInt64(2));
             Assert.Equal(6UL, ProtoObject.Read(entries[1].Bytes(1), 128).UInt64(4));
             Assert.Equal(3UL, ProtoObject.Read(entries[23].Bytes(1), 128).UInt64(4));
+            // Native BestiaryTabUI dereferences both entries while binding the row,
+            // before it can finish the monster category and loot presentation.
+            Assert.Equal(10000UL, ProtoObject.Read(entries[29].Bytes(3), 128).UInt64(2));
+            Assert.Equal(100UL, ProtoObject.Read(entries[48].Bytes(3), 128).UInt64(2));
             if (!loseDuringLoading) await AssertMap(world, id, a.Slot, token);
             world.Client.LingerState = new LingerOption(true, 0); world.Dispose();
             await disconnected.Task.WaitAsync(token);
