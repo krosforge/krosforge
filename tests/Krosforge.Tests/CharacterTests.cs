@@ -56,7 +56,7 @@ public sealed class CharacterTests : IDisposable
     public void FailedInsertRollsBackAndCanBeRetried(string timing)
     {
         using var profiles = new ProfileStore(root); var profile = profiles.Create("A"); var store = new CharacterStore(root);
-        using var db = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(root, "krosforge.db")); db.Open();
+        using var db = new Microsoft.Data.Sqlite.SqliteConnection("Pooling=False;Data Source=" + Path.Combine(root, "krosforge.db")); db.Open();
         using var command = db.CreateCommand();
         command.CommandText = $"CREATE TRIGGER fail_creation {timing} INSERT ON characters BEGIN SELECT RAISE(ABORT,'test failure'); END";
         command.ExecuteNonQuery();
