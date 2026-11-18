@@ -8,6 +8,7 @@ internal sealed partial class LocalSessionHost
 {
     private async Task ServeWorld(NetworkStream stream, CancellationToken token)
     {
+        await using var output = new WorldOutput(stream, token);
         Session? session = null;
         long lease = 0;
         bool transferred = false, ready = false, returnIssued = false;
@@ -22,10 +23,10 @@ internal sealed partial class LocalSessionHost
         {
             while (!token.IsCancellationRequested)
             {
-                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(session is null ? authentication.Token : token, session?.Token ?? token);
+                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(session is null ? authentication.Token : output.Token, session?.Token ?? output.Token);
                 var request = WorldProtocol.Read(await ReadFrame(stream, deadline.Token));
                 diagnostic?.Invoke("world-request " + request.Type);
-                var body = ProtoObject.Read(request.Payload, 128);
+                var body = ProtoObject.Read(request.Payload, request.Type == "jok" ? 600 : 128);
                 byte[] reply;
                 if (request.Type == "knc")
                 {
@@ -61,6 +62,7 @@ internal sealed partial class LocalSessionHost
                             lease = returned.Lease;
                             returnIssued = true;
                             session.Phase("returning-server");
+                            await output.Send(null, deadline.Token);
                             await writeTransfer(stream, WorldProtocol.Event("kmz", WorldProtocol.Join(WorldProtocol.Number(1, 1), WorldProtocol.Bytes(3, Encoding.UTF8.GetBytes(returned.Ticket)))), deadline.Token);
                             transferred = true;
                             return;
@@ -70,7 +72,7 @@ internal sealed partial class LocalSessionHost
                             pendingDeletion = null;
                             if (characters is null) { reply = WorldProtocol.Event("ksn", characterWire.CreationResult("failure")); break; }
                             var result = characters.Create(session.Profile.Id, characterWire.ReadCreation(request.Payload), out var createdId);
-                            await WorldProtocol.Write(stream, WorldProtocol.Event("ksn", characterWire.CreationResult(result)), deadline.Token);
+                            await output.Send(WorldProtocol.Event("ksn", characterWire.CreationResult(result)), deadline.Token);
                             if (result != "success") continue;
                             // The native creation flow selects the first entry in this response.
                             reply = WorldProtocol.Event("ksv", characterWire.List(characters.List(session.Profile.Id).OrderByDescending(c => c.Id == createdId))); break;
@@ -79,7 +81,8 @@ internal sealed partial class LocalSessionHost
                         case "kta" when ready:
                             pendingDeletion = null;
                             var selectedId = characterWire.SelectionId(request.Payload);
-                            if (selected is null) selected = worldEntry?.Select(session.Profile.Id, session.Profile.Slot, connectionIdentity, selectedId);
+                            if (selected is null) selected = worldEntry?.Select(session.Profile.Id, session.Profile.Slot, connectionIdentity, selectedId, notice =>
+                            { foreach (var frame in WorldEntryWire.Events(notice)) output.Post(frame); }, output.Abort);
                             if (selected is not null && selected.Character.Id != selectedId) throw new ProtocolException("Character already selected.");
                             reply = WorldProtocol.Event("ksb", selected is null ? characterWire.SelectionRejected() : characterWire.SelectionAccepted(selected.Character));
                             break;
@@ -100,17 +103,35 @@ internal sealed partial class LocalSessionHost
                             WorldEntryWire.ReadContext(request.Payload);
                             if (selected.ContextCreated) throw new ProtocolException("Context already created.");
                             selected.ContextCreated = true;
-                            await WorldProtocol.Write(stream, WorldProtocol.Event("kjp", WorldEntryWire.Context()), deadline.Token);
-                            await WorldProtocol.Write(stream, WorldProtocol.Event("jow", WorldEntryWire.LoadMap(selected.Location.MapId)), deadline.Token);
-                            await WorldProtocol.Write(stream, WorldProtocol.Event("irl", WorldEntryWire.EmptyInventory()), deadline.Token);
+                            await output.Send(WorldProtocol.Event("kjp", WorldEntryWire.Context()), deadline.Token);
+                            await output.Send(WorldProtocol.Event("jow", WorldEntryWire.LoadMap(selected.Location.MapId)), deadline.Token);
+                            await output.Send(WorldProtocol.Event("irl", WorldEntryWire.EmptyInventory()), deadline.Token);
                             reply = WorldProtocol.Event("krg", WorldEntryWire.Statistics(selected));
                             break;
                         case "kjt" when selected is { ContextCreated: true }:
-                            if (WorldEntryWire.ReadMap(request.Payload) != selected.Location.MapId) throw new ProtocolException("Loaded map differs from selected location.");
-                            await WorldProtocol.Write(stream, WorldProtocol.Event("jnj", WorldEntryWire.Information(selected)), deadline.Token);
-                            reply = WorldProtocol.Event("jnv", WorldEntryWire.Reference(selected.Map));
-                            selected.MapReady = true;
-                            break;
+                            // Native optional requests recur after each scene load. Keep
+                            // the unknown-request budget per admitted map, not per lifetime.
+                            if (!selected.MapReady) unsupported = 0;
+                            worldEntry!.Join(selected, WorldEntryWire.ReadMap(request.Payload));
+                            await output.Send(null, deadline.Token);
+                            session.Phase("in-world");
+                            continue;
+                        case "jok" when selected is { MapReady: true }:
+                            var movement = WorldMovementWire.Read(request.Payload);
+                            diagnostic?.Invoke($"world-path map={movement.Map} cells={string.Join(',', movement.TurningCells)}");
+                            worldEntry!.Move(selected, movement);
+                            continue;
+                        case "jny" when selected is { MapReady: true }:
+                            // This protocol ACK has no movement identity. It never advances
+                            // the server clock or commits a position, including when delayed.
+                            WorldMovementWire.Acknowledgement(request.Payload);
+                            continue;
+                        case "jpj" when selected is { MapReady: true }:
+                            worldEntry!.Cancel(selected, WorldMovementWire.Cancellation(request.Payload));
+                            continue;
+                        case "joc" when selected is { MapReady: true }:
+                            worldEntry!.ChangeMap(selected, WorldMovementWire.ChangeMap(request.Payload));
+                            continue;
                         case "kkc": throw new ProtocolException("No character selected.");
                         default:
                             if (!ready || ++unsupported > 128) throw new ProtocolException("Unsupported request budget exceeded.");
@@ -118,10 +139,9 @@ internal sealed partial class LocalSessionHost
                             continue;
                     }
                 }
-                await WorldProtocol.Write(stream, reply, deadline.Token);
+                await output.Send(reply, deadline.Token);
                 if (request.Type == "ksu") session!.Phase("character-selection");
                 if (request.Type == "kta" && selected is not null) session!.Phase("entering-world");
-                if (request.Type == "kjt" && selected is { MapReady: true }) session!.Phase("in-world");
             }
         }
         finally
