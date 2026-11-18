@@ -24,3 +24,15 @@ Independent request bytes used in TCP tests:
 - `1064`: destination map 100.
 
 For the synthetic straight path, the response must contain expanded bytes `00 01 02` under field 1 and the moving actor under field 4. TCP assertions also verify snapshot identities, departure/arrival ordering, absence of events from another map, and restoration after a socket reset during a committed transition.
+
+## Running profile selection
+
+Timing is checked through the native selection path, not only a speed factory. In build 3.7.14.18, `fce.bcqf` (RVA `0x1a6fd80`) selects the animation profile through `xs.rkb` (RVA `0x25ff450`). Its unmounted running branch selects mode 5. `xs.rjy` registers mode 5 with `xz.rlg` speeds (factory RVA `0x2605e10`):
+
+| Direction on screen | IEEE-754 inverse milliseconds | Segment duration |
+| --- | --- | --- |
+| Diagonal | `0x3bf0f0f1` | 136 ms |
+| Horizontal | `0x3ba0a0a1` | 204 ms |
+| Vertical | `0x3c088889` | 120 ms |
+
+Mode 2 uses the distinct `xz.rle` profile (170/255/150 ms); using it for these runs accumulates an incorrect delay. The native regression uses the **embedded production policy** and an observed cancellation at cell 500 after 3,239 ms on the path `87 → 159 → 271 → 416 → 500`, followed by `500 → 416 → 315 → 287`, with a second account present and moving. The former policy rejects cell 500 and corrects to 416. A second regression replays the recorded rapid short continuations against the same embedded policy.

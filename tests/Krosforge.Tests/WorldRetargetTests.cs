@@ -5,11 +5,48 @@ namespace Krosforge.Tests;
 
 public sealed partial class WorldSessionTests
 {
+    private static MovementPolicy ShippedMovementPolicy()
+    {
+        using var resource = typeof(WorldEntryCatalog).Assembly.GetManifestResourceStream("Krosforge.Runtime.Native.world-entry.json")!;
+        using var json = System.Text.Json.JsonDocument.Parse(resource);
+        return System.Text.Json.JsonSerializer.Deserialize<MovementPolicy>(json.RootElement.GetProperty("Movement"))!;
+    }
+
+    [Fact]
+    public void NativeLongRunCanBeInterruptedAndReversedWhileAnotherAccountMoves()
+    {
+        // Use the shipped policy, not a second copy of its timing constants.
+        var policy = ShippedMovementPolicy();
+        var catalog = new WorldEntryCatalog(new(100, 87, 0, 1), policy, [],
+            new EntryMap(100, 1, Enumerable.Range(0, 560).ToHashSet()));
+        using var f = new MovementFixture(deferTimers: true, catalog: catalog);
+        var (a, notices) = f.Join("Alpha"); var (b, observer) = f.Join("Beta");
+        // Native trace: 15:59:51.2646359 -> 15:59:54.5037031, 3,239 ms.
+        // The former 170/255/150 policy still placed Alpha at 416 and rejected
+        // both this cancellation at 500 and the following path from that cell.
+        f.Service.Move(a, new(100, [87, 159, 271, 416, 500], 2));
+        var motion = a.Moving!;
+        f.Service.Move(b, new(100, [87, 88, 89, 90], 0));
+        f.Clock.Advance(TimeSpan.FromMilliseconds(3239));
+        f.Service.Cancel(a, 500);
+        Assert.Equal(500, a.Location.CellId);
+        Assert.Empty(notices.OfType<ActorCorrected>());
+        Assert.Equal(500, observer.OfType<ActorCorrected>().Last().Cell);
+        f.Service.Move(a, new(100, [500, 416, 315, 287], 6));
+        Assert.NotNull(a.Moving);
+        Assert.Equal(287, notices.OfType<ActorMoved>().Last(m => m.Id == a.Character.Id).Cells[^1]);
+        f.Service.Advance(a, motion); // The old timer cannot change this reversal.
+        Assert.Equal(500, a.Location.CellId);
+        f.Clock.Advance(TimeSpan.FromSeconds(5));
+        f.Service.Advance(a, a.Moving!);
+        Assert.Equal(287, a.Location.CellId);
+        Assert.Empty(notices.OfType<ActorCorrected>());
+    }
+
     [Fact]
     public void ObservedRapidContinuationAcrossDifferentDirectionsDoesNotRewind()
     {
-        var policy = new MovementPolicy(14, 560, 200)
-        { Timing = new(170, 255, 150), CancellationLeadSteps = 1, PredictionLeadMilliseconds = 50 };
+        var policy = ShippedMovementPolicy();
         var catalog = new WorldEntryCatalog(new(100, 402, 0, 1), policy, [],
             new EntryMap(100, 1, new HashSet<int> { 402, 401, 414, 413, 412, 411, 410 }));
         using var f = new MovementFixture(deferTimers: true, catalog: catalog);
