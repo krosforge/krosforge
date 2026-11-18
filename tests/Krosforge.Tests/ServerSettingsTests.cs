@@ -103,6 +103,26 @@ public sealed class ServerSettingsTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ServerPresentation.ApplyValidatedAsync(source,target,"Cancelled",hashes,cancellation.Token));
         Assert.Equal("Renamed", Lookup(File.ReadAllBytes(FileAt(target,"en")),ServerPresentation.NameKey));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TemporaryLinksCannotRedirectPersonalization(bool dangling)
+    {
+        var source = Path.Combine(root, "source"); var target = Path.Combine(root, "target");
+        var bytes = Fixture();
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(source, "en"))!);
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(target, "en"))!);
+        File.WriteAllBytes(FileAt(source, "en"), bytes);
+        File.WriteAllBytes(FileAt(target, "en"), bytes);
+        var outside = Path.Combine(root, "outside");
+        if (!dangling) File.WriteAllText(outside, "Preserve");
+        File.CreateSymbolicLink(FileAt(target, "en") + ".krosforge-server.tmp", outside);
+        var hashes = new Dictionary<string, string> { ["en"] = Convert.ToHexStringLower(SHA256.HashData(bytes)) };
+        await Assert.ThrowsAsync<IOException>(() => ServerPresentation.ApplyValidatedAsync(source, target, "New", hashes, TestContext.Current.CancellationToken));
+        if (dangling) Assert.False(File.Exists(outside));
+        else Assert.Equal("Preserve", File.ReadAllText(outside));
+        Assert.Equal(bytes, File.ReadAllBytes(FileAt(target, "en")));
+    }
     private static Snapshot Snapshot(RuntimeService runtime) => runtime.Handle(new(Wire.Version,"snapshot")).Data!.Value.Deserialize<Snapshot>()!;
     private static string FileAt(string root,string language) => Path.Combine(root,"Dofus_Data","StreamingAssets","Content","I18n",language+".bin");
     private static byte[] Fixture()

@@ -59,8 +59,12 @@ internal static class ServerPresentation
     private static void Check(string path)
     {
         SafePaths.CheckTree(Path.GetDirectoryName(path)!);
-        if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-            throw new IOException("ErrorCopyInvalid");
+        try
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("ErrorCopyInvalid");
+        }
+        catch (FileNotFoundException) { }
     }
     private static async Task ReplaceAsync(string destination, byte[] bytes, CancellationToken token)
     {

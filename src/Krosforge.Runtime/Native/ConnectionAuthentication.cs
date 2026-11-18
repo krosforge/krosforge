@@ -30,14 +30,14 @@ internal static class ConnectionAuthentication
             var descriptor = new ArrayBufferWriter<byte>();
             ProtoWriter.UInt64(descriptor, 1, (ulong)id);
             ProtoWriter.UInt64(descriptor, 2, 0);
-            ProtoWriter.UInt64(descriptor, 3, 0);
+            ProtoWriter.UInt64(descriptor, 3, 1);
             var realm = new ArrayBufferWriter<byte>();
             ProtoWriter.Bytes(realm, 1, descriptor.WrittenSpan);
             ProtoWriter.UInt64(realm, 2, 0);
             ProtoWriter.Bytes(collection, 1, realm.WrittenSpan);
         }
         var quota = new ArrayBufferWriter<byte>();
-        ProtoWriter.UInt64(quota, 1, 0);
+        ProtoWriter.UInt64(quota, 1, 1);
         ProtoWriter.UInt64(quota, 2, 5);
         ProtoWriter.Bytes(collection, 2, quota.WrittenSpan);
         var account = new ArrayBufferWriter<byte>();

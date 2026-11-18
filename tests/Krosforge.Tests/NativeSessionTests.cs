@@ -53,7 +53,10 @@ public sealed class NativeSessionTests
         var descriptor = ProtoObject.Read(ProtoObject.Read(realms[0].Bytes, 128).Bytes(1), 128);
         Assert.Equal(290UL, descriptor.UInt64(1));
         Assert.Equal(0UL, descriptor.UInt64(2));
-        Assert.Equal(0UL, descriptor.UInt64(3));
+        Assert.Equal(1UL, descriptor.UInt64(3));
+        var quota = ProtoObject.Read(ProtoObject.Read(accepted.Bytes(4), 128).Bytes(2), 128);
+        Assert.Equal(1UL, quota.UInt64(1));
+        Assert.Equal(5UL, quota.UInt64(2));
         while (!phases.Contains("server-selection")) await Task.Delay(10, timeout.Token);
         using var replay = new TcpClient();
         await replay.ConnectAsync("127.0.0.1", host.ConnectionPort, timeout.Token);

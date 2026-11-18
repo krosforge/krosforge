@@ -44,3 +44,5 @@ Before a native session starts, the runtime overrides the realm name's integer l
 Each changed file is promoted from a temporary file. The completion record is informational: retries validate all language outputs, repair partial application, and start no native process until every language succeeds. Additional profiles reuse the presentation already applied in that runtime. Updating an existing shared copy does not copy the whole client again.
 
 Synthetic tests cover persistence, localized dialogs, protocol identity and partial-application recovery. Native rendering and simultaneous Windows sessions require separate observation; automated binary lookup tests alone do not establish visual correctness.
+
+The connection game-type discriminator is `1` for the classic multiple-account category, including its character quota. This differs from the static catalog’s regular game-type ID `0`. The pinned client’s mono-account getter classifies connection values `0` and `2` as single-account; reusing catalog IDs on the connection wire mislabels the server.
