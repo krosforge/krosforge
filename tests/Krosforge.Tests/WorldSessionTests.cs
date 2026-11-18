@@ -82,4 +82,124 @@ public sealed class WorldSessionTests
         await Send(invalid, "ksu", [], token);
         Assert.Equal(0, await invalid.GetStream().ReadAsync(new byte[1], token));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResetDuringPartialTransferReleasesSessionForFreshLogin(bool returning)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); var token = timeout.Token;
+        var partial = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool interrupt = !returning;
+        async Task WriteTransfer(NetworkStream stream, byte[] payload, CancellationToken cancellation)
+        {
+            if (!interrupt) { await WorldProtocol.Write(stream, payload, cancellation); return; }
+            // Begin a frame but leave its length incomplete. The peer resets the actual TCP socket.
+            await stream.WriteAsync(new byte[] { 0x80 }, cancellation);
+            partial.SetResult();
+            await Assert.ThrowsAnyAsync<IOException>(async () => { await stream.ReadExactlyAsync(new byte[1], cancellation); });
+            throw new IOException("Peer reset during transfer.");
+        }
+        await using var host = new LocalSessionHost(diagnostic: message =>
+        {
+            if (message == "connection-ended IOException") failed.TrySetResult();
+        }, writeTransfer: WriteTransfer);
+        using var profile = host.Register(new(Guid.NewGuid(), "Interrupted", 1), "en", _ => { });
+        using var other = host.Register(new(Guid.NewGuid(), "Unaffected", 2), "pt", _ => { });
+        // Establish the second account before enabling the fault.
+        interrupt = false;
+        using var otherLogin = new TcpClient(); await Login(host, otherLogin, other.IssueTicket(), token);
+        using var otherWorld = await Enter(host, otherLogin, token);
+        using var login = new TcpClient(); await Login(host, login, profile.IssueTicket(), token);
+        using var world = returning ? await Enter(host, login, token) : null;
+        interrupt = true;
+        var victim = world ?? login;
+        if (returning) await Send(victim, "knd", [], token);
+        else await WorldProtocol.Write(victim.GetStream(), WorldProtocol.Bytes(1,
+            WorldProtocol.Join(S(1, "2"), WorldProtocol.Bytes(4, WorldProtocol.Number(1, 290)))), token);
+        await partial.Task.WaitAsync(token);
+        var prefix = new byte[1]; await victim.GetStream().ReadExactlyAsync(prefix, token);
+        Assert.Equal(0x80, prefix[0]);
+        victim.Client.LingerState = new LingerOption(true, 0); victim.Dispose();
+        await failed.Task.WaitAsync(token);
+        interrupt = false;
+        using var fresh = new TcpClient();
+        var account = ProtoObject.Read((await Login(host, fresh, profile.IssueTicket(), token)).Bytes(1), 128);
+        Assert.Equal(1UL, account.UInt64(1));
+        using var recovered = await Enter(host, fresh, token);
+        await Send(otherWorld, "kne", WorldProtocol.Number(2, 1), token);
+        Assert.Equal(1UL, (await Event(otherWorld, "knb", token)).UInt64(1));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LateTransferWriteFailureCannotReleaseAnAlreadyAttachedSocket(bool returning)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); var token = timeout.Token;
+        var attached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleaned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool interrupt = !returning;
+        async Task WriteTransfer(NetworkStream stream, byte[] payload, CancellationToken cancellation)
+        {
+            await WorldProtocol.Write(stream, payload, cancellation);
+            if (!interrupt) return;
+            await attached.Task.WaitAsync(cancellation);
+            throw new IOException("Late transport failure after delivery.");
+        }
+        await using var host = new LocalSessionHost(diagnostic: message =>
+        { if (message == "connection-ended IOException") cleaned.TrySetResult(); }, writeTransfer: WriteTransfer);
+        using var profile = host.Register(new(Guid.NewGuid(), "Replacement", 1), "en", _ => { });
+        using var login = new TcpClient(); await Login(host, login, profile.IssueTicket(), token);
+        using var oldWorld = returning ? await Enter(host, login, token) : null;
+        interrupt = true;
+        using var replacement = new TcpClient();
+        if (returning)
+        {
+            await Send(oldWorld!, "knd", [], token);
+            var ticket = (await Event(oldWorld!, "kmz", token)).Text(3);
+            await Login(host, replacement, ticket, token);
+        }
+        else
+        {
+            var endpoint = ProtoObject.Read((await Connection(login, 4, WorldProtocol.Number(1, 290), token)).Bytes(1), 128);
+            await replacement.ConnectAsync("127.0.0.1", host.WorldPort, token);
+            await Send(replacement, "knc", S(1, endpoint.Text(1)), token);
+            await Event(replacement, "knh", token);
+        }
+        attached.SetResult(); await cleaned.Task.WaitAsync(token); interrupt = false;
+        if (returning) { using var recovered = await Enter(host, replacement, token); }
+        else
+        {
+            await Send(replacement, "ksj", [], token); await Event(replacement, "ksk", token);
+            await Send(replacement, "ksu", [], token); (await Event(replacement, "ksv", token)).Only();
+        }
+    }
+
+    private sealed class Clock : TimeProvider
+    {
+        internal DateTimeOffset Now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AbandonedDeliveredTicketExpiresAndAllowsFreshTcpAuthentication(bool returning)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); var token = timeout.Token;
+        var clock = new Clock();
+        await using var host = new LocalSessionHost(clock: clock);
+        using var profile = host.Register(new(Guid.NewGuid(), "Abandoned", 1), "en", _ => { });
+        using var login = new TcpClient(); await Login(host, login, profile.IssueTicket(), token);
+        using var world = returning ? await Enter(host, login, token) : null;
+        if (returning) { await Send(world!, "knd", [], token); await Event(world!, "kmz", token); }
+        else await Connection(login, 4, WorldProtocol.Number(1, 290), token);
+        var abandoned = world ?? login;
+        Assert.Equal(0, await abandoned.GetStream().ReadAsync(new byte[1], token));
+        // The response was delivered but the peer never uses its transfer credential.
+        abandoned.Dispose(); clock.Now += TimeSpan.FromSeconds(31);
+        using var fresh = new TcpClient(); await Login(host, fresh, profile.IssueTicket(), token);
+        using var recovered = await Enter(host, fresh, token);
+    }
+
 }

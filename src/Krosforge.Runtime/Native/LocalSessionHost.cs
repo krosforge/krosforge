@@ -24,6 +24,8 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
     private readonly SemaphoreSlim slots = new(24);
     private readonly TimeSpan authenticationTimeout;
     private readonly Action<string>? diagnostic;
+    private readonly TimeProvider clock;
+    private readonly Func<NetworkStream, byte[], CancellationToken, Task> writeTransfer;
 
     private int nextClient;
     internal int WorldPort => ((IPEndPoint)world.LocalEndpoint).Port;
@@ -31,9 +33,12 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
     internal int LauncherPort => ((IPEndPoint)launcher.LocalEndpoint).Port;
     internal int ConnectionPort => ((IPEndPoint)connection.LocalEndpoint).Port;
     internal string BaseUrl => $"http://127.0.0.1:{HttpPort}";
-    internal LocalSessionHost(TimeSpan? authenticationTimeout = null, Action<string>? diagnostic = null)
+    internal LocalSessionHost(TimeSpan? authenticationTimeout = null, Action<string>? diagnostic = null, TimeProvider? clock = null,
+        Func<NetworkStream, byte[], CancellationToken, Task>? writeTransfer = null)
     {
         this.diagnostic = diagnostic;
+        this.clock = clock ?? TimeProvider.System;
+        this.writeTransfer = writeTransfer ?? ((stream, payload, token) => WorldProtocol.Write(stream, payload, token));
         this.authenticationTimeout = authenticationTimeout ?? TimeSpan.FromSeconds(30);
         try
         {
@@ -57,15 +62,15 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
         private readonly CancellationTokenSource lifetime = new();
         private string? ticket;
         private DateTimeOffset ticketExpires;
-        internal SessionTransfer Transfer { get; } = new(TimeProvider.System);
+        internal SessionTransfer Transfer { get; } = new(owner.clock);
         internal Profile Profile { get; } = profile;
         internal string Language { get; } = language;
         internal string ConnectSecret { get; } = Secret();
         internal string Key { get; } = Secret();
         internal CancellationToken Token => lifetime.Token;
-        internal void ReleaseNetwork(long lease)
+        internal void ReleaseNetwork(long lease, string? expectedPhase = null)
         {
-            lock (gate) if (!lifetime.IsCancellationRequested && Transfer.Release(lease)) phase("disconnected");
+            lock (gate) if (!lifetime.IsCancellationRequested && Transfer.Release(lease, expectedPhase)) phase("disconnected");
         }
         internal void Phase(string value) { lock (gate) { if (!lifetime.IsCancellationRequested) { owner.diagnostic?.Invoke("phase " + value); phase(value); } } }
         internal string IssueTicket()
@@ -216,6 +221,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
         Session? session = null;
         long lease = 0;
         bool transferred = false;
+        bool handoffIssued = false;
         using var authentication = CancellationTokenSource.CreateLinkedTokenSource(token);
         authentication.CancelAfter(authenticationTimeout);
         try
@@ -250,8 +256,9 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
                     {
                         var ticket = session.Transfer.Handoff(lease) ?? throw new ProtocolException("Transfer rejected.");
                         payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, WorldProtocol.Selected(ticket, WorldPort));
+                        handoffIssued = true;
                         session.Phase("connecting-server");
-                        await WorldProtocol.Write(stream, payload, deadline.Token);
+                        await writeTransfer(stream, payload, deadline.Token);
                         transferred = true;
                         return;
                     }
@@ -265,7 +272,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
         {
             if (session is not null && !transferred)
             {
-                session.ReleaseNetwork(lease);
+                session.ReleaseNetwork(lease, handoffIssued ? "handoff" : "connection");
             }
         }
     }

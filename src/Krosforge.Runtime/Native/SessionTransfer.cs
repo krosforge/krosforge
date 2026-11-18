@@ -52,9 +52,9 @@ internal sealed class SessionTransfer(TimeProvider clock)
     {
         lock (gate) { Expire(); return !disposed && generation == lease && phase == expected; }
     }
-    internal bool Release(long lease)
+    internal bool Release(long lease, string? expectedPhase = null)
     {
-        lock (gate) { if (generation != lease) return false; phase = "idle"; credential = null; return true; }
+        lock (gate) { if (generation != lease || expectedPhase is not null && phase != expectedPhase) return false; phase = "idle"; credential = null; return true; }
     }
     internal void Dispose() { lock (gate) { disposed = true; credential = null; phase = "idle"; } }
     private string Issue()

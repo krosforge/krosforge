@@ -10,7 +10,7 @@ internal sealed partial class LocalSessionHost
     {
         Session? session = null;
         long lease = 0;
-        bool transferred = false, ready = false;
+        bool transferred = false, ready = false, returnIssued = false;
         int unsupported = 0;
         using var authentication = CancellationTokenSource.CreateLinkedTokenSource(token);
         authentication.CancelAfter(authenticationTimeout);
@@ -54,8 +54,9 @@ internal sealed partial class LocalSessionHost
                             body.Only();
                             var returned = session.Transfer.Return(lease) ?? throw new ProtocolException("Return rejected.");
                             lease = returned.Lease;
+                            returnIssued = true;
                             session.Phase("returning-server");
-                            await WorldProtocol.Write(stream, WorldProtocol.Event("kmz", WorldProtocol.Join(WorldProtocol.Number(1, 1), WorldProtocol.Bytes(3, Encoding.UTF8.GetBytes(returned.Ticket)))), deadline.Token);
+                            await writeTransfer(stream, WorldProtocol.Event("kmz", WorldProtocol.Join(WorldProtocol.Number(1, 1), WorldProtocol.Bytes(3, Encoding.UTF8.GetBytes(returned.Ticket)))), deadline.Token);
                             transferred = true;
                             return;
                         case "ksu" when ready:
@@ -78,7 +79,7 @@ internal sealed partial class LocalSessionHost
         {
             if (session is not null && !transferred)
             {
-                session.ReleaseNetwork(lease);
+                session.ReleaseNetwork(lease, returnIssued ? "return" : "world");
             }
         }
     }
