@@ -103,8 +103,10 @@ public sealed class CombatTurns
         {
             var baseDamage = Roll(roll, effect.Minimum, effect.Maximum);
             var powered = (long)baseDamage * Math.Max(0L, 100L + fighter.Statistics.Power(effect.Element)) / 100;
-            var resisted = powered * (100 - Math.Clamp(target.Statistics.Resistance.GetValueOrDefault(effect.Element), 0, 100)) / 100;
-            damage = (int)Math.Min(target.Life, resisted);
+            // Negative resistance is a weakness. Keep it signed and widen the product before capping to remaining life.
+            var resistance = target.Statistics.Resistance.GetValueOrDefault(effect.Element);
+            var resisted = (Int128)powered * Math.Max(0L, 100L - resistance) / 100;
+            damage = (int)Int128.Min(target.Life, resisted);
             fighters[target.Id] = target with { Life = target.Life - damage };
         }
         fighters[actor] = fighter with { Ap = fighter.Ap - spell.Cost };
