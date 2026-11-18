@@ -25,6 +25,7 @@ public abstract record CombatAction(long Actor);
 public sealed record CombatWalk(long Actor, IReadOnlyList<int> Cells) : CombatAction(Actor);
 public sealed record CombatCast(long Actor, CombatSpell Spell, int Cell, long? Target, bool Critical,
     int Damage, bool Killed) : CombatAction(Actor);
+public sealed record CombatSummary(long DamageDealt = 0, long DamageTaken = 0, int EnemiesDefeated = 0);
 
 // The owner serializes commands and animation acknowledgements. No wall clock, network or storage lives here.
 public sealed class CombatTurns
@@ -33,11 +34,14 @@ public sealed class CombatTurns
     private readonly MovementGrid grid;
     private readonly Dictionary<long, CombatFighter> fighters;
     private readonly Dictionary<(long Actor, int Spell, long? Target), int> uses = [];
+    private readonly Dictionary<long, CombatSummary> summaries = [];
     private readonly long[] order;
     private int current;
     public IReadOnlyList<long> Order => order.ToArray();
     public IReadOnlyList<CombatFighter> Fighters => order.Select(id => fighters[id]).ToArray();
     public CombatFighter Current => fighters[order[current]];
+    public CombatSummary Summary(long actor) => fighters.ContainsKey(actor)
+        ? summaries.GetValueOrDefault(actor) ?? new() : throw new ArgumentOutOfRangeException(nameof(actor));
     public long Serial { get; private set; } = 1;
     public int Round { get; private set; } = 1;
     public int OrderIndex => current;
@@ -108,6 +112,10 @@ public sealed class CombatTurns
             var resisted = (Int128)powered * Math.Max(0L, 100L - resistance) / 100;
             damage = (int)Int128.Min(target.Life, resisted);
             fighters[target.Id] = target with { Life = target.Life - damage };
+            var dealt = Summary(actor); var taken = Summary(target.Id);
+            summaries[actor] = dealt with { DamageDealt = checked(dealt.DamageDealt + damage),
+                EnemiesDefeated = checked(dealt.EnemiesDefeated + (target.Team != fighter.Team && damage == target.Life ? 1 : 0)) };
+            summaries[target.Id] = taken with { DamageTaken = checked(taken.DamageTaken + damage) };
         }
         fighters[actor] = fighter with { Ap = fighter.Ap - spell.Cost };
         var key = (actor, spellId, target?.Id); uses[key] = uses.GetValueOrDefault(key) + 1;

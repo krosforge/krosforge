@@ -26,12 +26,12 @@ public sealed partial class WorldSessionTests
         internal readonly WorldEntryService Service;
         internal readonly LocationStore Locations;
         private readonly List<WorldEntryService.Selection> selections = [];
-        internal MovementFixture(bool deferTimers = false, int cancellationLeadSteps = 0, int predictionLeadMilliseconds = 0, int stepMilliseconds = 1000, WorldEntryCatalog? catalog = null, Func<WorldEntryCatalog, CombatCatalog>? combat = null, CombatSpellCatalog? spells = null)
+        internal MovementFixture(bool deferTimers = false, int cancellationLeadSteps = 0, int predictionLeadMilliseconds = 0, int stepMilliseconds = 1000, WorldEntryCatalog? catalog = null, Func<WorldEntryCatalog, CombatCatalog>? combat = null, CombatSpellCatalog? spells = null, bool outcomes = false)
         {
             Clock = new(deferTimers);
             Profiles = new(Root); Characters = new(Root); Locations = new(Root);
             Catalog = catalog ?? MovementCatalog(stepMilliseconds, cancellationLeadSteps, predictionLeadMilliseconds);
-            Service = new(new CharacterService(Characters, SyntheticCatalog()), Locations, Catalog, Clock, combat?.Invoke(Catalog), spells);
+            Service = new(new CharacterService(Characters, SyntheticCatalog()), Locations, Catalog, Clock, combat?.Invoke(Catalog), spells, outcomes ? new CombatOutcomeStore(Root) : null);
         }
         internal (WorldEntryService.Selection Selection, List<WorldNotice> Notices) Join(string name)
         {

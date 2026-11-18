@@ -15,7 +15,8 @@
       "PlayerCell": 338,
       "MonsterCell": 455,
       "MonsterId": 3270,
-      "Grade": 1
+      "Grade": 1,
+      "Reward": { "Currency": 1, "RestoreFullLife": true }
     }
   ],
   "Calendar": {

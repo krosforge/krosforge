@@ -49,7 +49,7 @@ public sealed class DatabaseMigrationTests : IDisposable
         using var legacy = Legacy();
         Assert.True(new FileInfo(Database + "-wal").Length > 0);
         using (var store = new ProfileStore(root)) Assert.Equal("Alpha", Assert.Single(store.List()).Name);
-        Assert.Equal(2L, Scalar(legacy, "PRAGMA user_version")); AssertLegacyData(legacy);
+        Assert.Equal((long)DatabaseSchema.Current, Scalar(legacy, "PRAGMA user_version")); AssertLegacyData(legacy);
         Assert.Equal(0L, Scalar(legacy, "SELECT COUNT(*) FROM character_locations"));
         var backupPath = Assert.Single(Directory.GetFiles(Path.Combine(root, "backups"), "*.db"));
         using var backup = Open(backupPath);
@@ -66,7 +66,7 @@ public sealed class DatabaseMigrationTests : IDisposable
         Assert.Equal(1L, Scalar(db, "PRAGMA user_version")); AssertLegacyData(db);
         Assert.Equal(0L, Scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE name='character_locations'"));
         DatabaseSchema.Initialize(db, root);
-        Assert.Equal(2L, Scalar(db, "PRAGMA user_version")); AssertLegacyData(db);
+        Assert.Equal((long)DatabaseSchema.Current, Scalar(db, "PRAGMA user_version")); AssertLegacyData(db);
     }
     [Fact]
     public void BackupFailureLeavesSchemaAndCharactersUntouched()
@@ -75,7 +75,32 @@ public sealed class DatabaseMigrationTests : IDisposable
         Assert.Throws<IOException>(() => DatabaseSchema.Initialize(db, root));
         Assert.Equal(1L, Scalar(db, "PRAGMA user_version")); AssertLegacyData(db);
         File.Delete(Path.Combine(root, "backups")); DatabaseSchema.Initialize(db, root);
+        Assert.Equal((long)DatabaseSchema.Current, Scalar(db, "PRAGMA user_version"));
+    }
+    [Fact]
+    public void SchemaTwoMigrationPreservesLocationsAndRollsBackNewTablesOnFailure()
+    {
+        using var db = Legacy();
+        Execute(db, """
+            CREATE TABLE character_locations(character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                map_id INTEGER NOT NULL,cell_id INTEGER NOT NULL,direction INTEGER NOT NULL,revision INTEGER NOT NULL);
+            INSERT INTO character_locations VALUES(42,100,10,3,7);
+            PRAGMA user_version=2;
+            """);
+        Assert.Throws<IOException>(() => DatabaseSchema.Initialize(db, root, () => throw new IOException("Interrupted")));
         Assert.Equal(2L, Scalar(db, "PRAGMA user_version"));
+        Assert.Equal(0L, Scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('character_wallets','combat_outcomes')"));
+        Assert.Equal(7L, Scalar(db, "SELECT revision FROM character_locations WHERE character_id=42"));
+        var backupPath = Assert.Single(Directory.GetFiles(Path.Combine(root, "backups"), "*.db"));
+        using (var backup = Open(backupPath))
+        {
+            Assert.Equal(2L, Scalar(backup, "PRAGMA user_version"));
+            Assert.Equal(7L, Scalar(backup, "SELECT revision FROM character_locations WHERE character_id=42"));
+        }
+        DatabaseSchema.Initialize(db, root);
+        Assert.Equal((long)DatabaseSchema.Current, Scalar(db, "PRAGMA user_version")); AssertLegacyData(db);
+        Assert.Equal(7L, Scalar(db, "SELECT revision FROM character_locations WHERE character_id=42"));
+        Assert.Equal(0L, Scalar(db, "SELECT COUNT(*) FROM combat_outcomes"));
     }
     [Fact]
     public void FutureSchemaIsRejectedWithoutChangingJournalOrContents()

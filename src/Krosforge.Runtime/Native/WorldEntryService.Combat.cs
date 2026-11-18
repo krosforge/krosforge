@@ -24,6 +24,9 @@ internal sealed partial class WorldEntryService
         internal Task Tick { get; set; } = Task.CompletedTask;
         internal bool Loaded { get; set; }
         internal bool Started { get; set; }
+        internal long StartedAt { get; set; }
+        internal Guid? DurableId { get; set; }
+        internal CombatReceipt? Receipt { get; set; }
     }
     private readonly Dictionary<long, Selection> claimedGroups = [];
     private long lastFight;
@@ -66,6 +69,7 @@ internal sealed partial class WorldEntryService
             Attack(selection, encounter.GroupId); return;
         }
         var fight = new FightSession(checked(++lastFight), encounter, selection.Character.Id);
+        fight.DurableId = outcomes?.Begin(selection.Profile, ServerPresentation.RealmId, selection.Character.Id, encounter.GroupId, selection.Location);
         claimedGroups.Add(encounter.GroupId, selection);
         Broadcast(selection.Location.MapId, new EncounterDeparted(encounter.GroupId));
         Broadcast(selection.Location.MapId, new ActorDeparted(selection.Character.Id), except: selection);
@@ -121,6 +125,7 @@ internal sealed partial class WorldEntryService
             if (selection.Fight is not { Loaded: true, Started: false } fight || !fight.Preparation.SetReady(selection.Character.Id, ready)) return;
             if (!fight.Preparation.Start()) return;
             fight.Started = true;
+            fight.StartedAt = clock.GetTimestamp();
             if (spells is null) selection.Emit(new FightStarted([selection.Character.Id, -1]));
             else StartTurns(selection, fight);
         }
@@ -131,6 +136,7 @@ internal sealed partial class WorldEntryService
         {
             Require(selection);
             if (selection.Fight is null) return;
+            if (outcomes is not null) { FinishCombat(selection, selection.Fight, true); return; }
             ReleaseFight(selection);
             selection.MapReady = false;
             selection.MovementAvailableAt = EarliestPredictionStart();

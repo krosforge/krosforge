@@ -9,14 +9,18 @@ internal sealed record CombatMonster(int Definition, int Grade, int Level, int L
     internal CombatStatistics Statistics { get; init; } = CombatStatistics.Empty;
     internal ImmutableArray<int> Spells { get; init; } = [];
 }
+internal sealed record CombatReward(long Currency, bool RestoreFullLife);
 internal sealed record CombatEncounter(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
-    int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, CombatBoard Board);
+    int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, CombatBoard Board)
+{
+    internal CombatReward Reward { get; init; } = new(0, true);
+}
 
 internal sealed class CombatCatalog
 {
     private sealed record Source(string Path, string Sha256);
     private sealed record Definition(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
-        int FightType, int PlayerCell, int MonsterCell, int MonsterId, int Grade);
+        int FightType, int PlayerCell, int MonsterCell, int MonsterId, int Grade, CombatReward Reward);
     private sealed record Configuration(string Build, Source Monsters, Source Calendar, Definition[] Encounters);
     internal IReadOnlyList<CombatEncounter> Encounters { get; }
     internal int? NeutralCalendar { get; }
@@ -49,7 +53,7 @@ internal sealed class CombatCatalog
                     Statistics = CombatSpellCatalog.Statistics(grade),
                     Spells = ((object[])((Dictionary<string, object>)monster["spells"]).Single().Value)
                         .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToImmutableArray()
-                }, board);
+                }, board) { Reward = definition.Reward };
         }).ToArray();
         Validate(world);
     }
@@ -61,7 +65,8 @@ internal sealed class CombatCatalog
         {
             if (e.GroupId >= -1 || e.Direction is < 0 or > 7 || e.AttackDistance is < 1 or > 560 || e.FightType is < 0 or > 10 ||
                 !world.Map(e.Map).WalkableCells.Contains(e.GroupCell) || e.Monster.Definition <= 0 || e.Monster.Grade <= 0 ||
-                e.Monster.Level <= 0 || e.Monster.Life <= 0 || e.Monster.ActionPoints <= 0 || e.Monster.MovementPoints < 0)
+                e.Monster.Level <= 0 || e.Monster.Life <= 0 || e.Monster.ActionPoints <= 0 || e.Monster.MovementPoints < 0 ||
+                e.Reward is null || e.Reward.Currency < 0 || !e.Reward.RestoreFullLife)
                 throw new InvalidDataException("Invalid encounter configuration.");
             _ = new CombatPreparation(e.Board, [new(1, 0, e.PlayerCell, true), new(-1, 1, e.MonsterCell, false, true)]);
         }

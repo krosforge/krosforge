@@ -32,4 +32,16 @@ Casts check the active actor, AP, range, line of sight and per-turn/per-target l
 
 A movement or cast opens a native sequence addressed to its actor and closes it to the observing player. Only the matching acknowledgement unlocks the next action; sequence IDs do not reset between fights in the same coordinator. Ending a turn during animation waits for that acknowledgement. Turn deadlines are processed before incoming actions, even if the clock continuation has not run. Missing animation acknowledgements close that connection after the configured deadline rather than guessing the client's rendered position. Turn readiness also has a bounded fallback. Timing units are explicit in `combat-spells.json`.
 
-A defeated side seals further actions. Durable outcomes, rewards and automatic return to exploration are owned by the completion layer; forfeit remains available during this stage.
+A defeated side seals further actions. The completion layer commits the outcome before publishing the terminal animation, then waits for its acknowledgement before displaying the result and returning to exploration.
+
+## Results and recovery
+
+Each admitted fight receives a durable unique identity, separate from the native context ID. The SQLite ledger records its character, encounter and confirmed exploration location. Victory, defeat and abandonment close that identity. A new selection recovers an unfinished fight as interrupted, with no reward, and restores the existing exploration location.
+
+The encounter catalog defines a local reward of one currency unit for victory and full life restoration on return. These are reconstructed local rules, not an official reward formula. Defeat, abandonment and interruption earn nothing. Experience, levels and item loot are not awarded by this ruleset. The wallet is scoped to the character and survives reconnects and runtime restarts.
+
+Outcome and wallet update commit in one immediate SQLite transaction. Repeating the same completion returns its receipt without adding the reward again; a conflicting completion is rejected. The terminal action is committed before its animation reaches the socket. If that socket disappears before acknowledgement or result delivery, reconnect restores the committed wallet without replaying a payment. If a transaction fails before commit, both changes roll back. No success result is published for that failed transaction.
+
+The result screen receives a player summary with effective damage dealt/taken and hostile defeats, accumulated once per accepted cast. The detailed participant statistics tab is not populated. The result screen is followed by context restoration, full life/AP/MP and the current wallet. Combat cells never replace the durable exploration location. An unfinished fight is not resumed after reconnect; it is closed as interrupted. Result screens are not replayed after reconnect, while the ledger and wallet remain durable. Native acceptance of the result presentation is recorded separately in its PR.
+
+Schema 3 adds the ledger and wallet with character foreign keys and an exclusive active-fight index. Migration from schemas 1 and 2 backs up the committed WAL snapshot before changing tables. See [world storage](world-entry.md) and the [result wire contract](../tests/Krosforge.Tests/Fixtures/combat-result-contract.md).
