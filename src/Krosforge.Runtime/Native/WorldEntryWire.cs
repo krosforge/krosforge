@@ -39,12 +39,28 @@ internal static class WorldEntryWire
     }
     internal static byte[] Information(WorldEntryService.Selection selection)
     {
-        var character = selection.Character;
-        var player = J(N(2, selection.Account), N(7, character.Gender), B(6, []));
+        return Information(selection.Map, [new(selection.Character, selection.Account, selection.Location)]);
+    }
+    internal static byte[] Information(EntryMap map, IEnumerable<WorldActor> actors) =>
+        J(actors.Select(actor => B(3, Actor(actor))).Concat([N(10, map.Id), N(12, map.Subarea)]).ToArray());
+    internal static byte[] Actor(WorldActor value)
+    {
+        var character = value.Character;
+        var player = J(N(2, value.Account), N(7, character.Gender), B(6, []));
         var humanoid = J(B(1, player), B(5, Encoding.UTF8.GetBytes(character.Name)));
         var details = J(B(1, B(3, humanoid)), B(2, new CharacterWireCodec().Look(character.Look)));
-        var position = J(N(3, selection.Location.CellId), N(4, selection.Location.Direction));
-        var actor = J(N(1, character.Id), B(2, position), B(3, details));
-        return J(B(3, actor), N(10, selection.Map.Id), N(12, selection.Map.Subarea));
+        var position = J(N(3, value.Location.CellId), N(4, value.Location.Direction));
+        return J(N(1, character.Id), B(2, position), B(3, details));
     }
+    internal static byte[][] Events(WorldNotice notice) => notice switch
+    {
+        MapSnapshot snapshot => [WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors)), WorldProtocol.Event("jnv", Reference(snapshot.Map))],
+        ActorAppeared appeared => [WorldProtocol.Event("jns", B(1, Actor(appeared.Actor)))],
+        ActorDeparted departed => [WorldProtocol.Event("kjz", N(1, departed.Id))],
+        ActorMoved moved => [WorldProtocol.Event("jnz", WorldMovementWire.Movement(moved.Id, moved.Cells))],
+        ActorCorrected corrected => [WorldProtocol.Event("joz", WorldMovementWire.Correction(corrected.Id, corrected.Cell))],
+        MovementReleased => [WorldProtocol.Event("jpk", [])],
+        MapLoading loading => [WorldProtocol.Event("jow", LoadMap(loading.Map))],
+        _ => throw new ArgumentOutOfRangeException(nameof(notice))
+    };
 }

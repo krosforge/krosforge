@@ -16,5 +16,47 @@
     "Life": 100,
     "ActionPoints": 6,
     "MovementPoints": 3
-  }
+  },
+  "Movement": {
+    "Columns": 14,
+    "MaximumCells": 560,
+    "StepMilliseconds": 200
+  },
+  "Transitions": [
+    {
+      "Source": 153878787,
+      "Destination": 153879299,
+      "Side": "right",
+      "ExitCells": [
+        335,
+        349,
+        363,
+        377,
+        391,
+        405,
+        419,
+        433,
+        447
+      ],
+      "ArrivalCell": 351,
+      "Direction": 0
+    },
+    {
+      "Source": 153879299,
+      "Destination": 153878787,
+      "Side": "left",
+      "ExitCells": [
+        336,
+        350,
+        364,
+        378,
+        392,
+        406,
+        420,
+        434
+      ],
+      "ArrivalCell": 362,
+      "Direction": 4
+    }
+  ]
 }

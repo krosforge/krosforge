@@ -132,7 +132,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
             // Each protocol bounds unauthenticated requests. Active sessions live until their
             // registration is revoked or the host shuts down, not a fixed connection age.
             try { await serve(client.GetStream(), lifetime.Token); }
-            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or ProtocolException or JsonException or Microsoft.Data.Sqlite.SqliteException) { diagnostic?.Invoke("connection-ended " + e.GetType().Name); }
+            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or ObjectDisposedException or ProtocolException or JsonException or Microsoft.Data.Sqlite.SqliteException) { diagnostic?.Invoke("connection-ended " + e.GetType().Name); }
             finally { slots.Release(); }
         }
     }

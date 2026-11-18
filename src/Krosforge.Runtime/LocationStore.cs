@@ -24,6 +24,27 @@ internal sealed class LocationStore(string directory)
         command.Parameters.AddWithValue("$direction", location.Direction); command.Parameters.AddWithValue("$revision", location.Revision);
         command.ExecuteNonQuery(); tx.Commit(); return location;
     }
+    internal void Save(Guid profile, int realm, long character, WorldLocation expected, WorldLocation next, Action<WorldLocation> validate,
+        Action? beforeCommit = null)
+    {
+        expected.Validate(); next.Validate(); validate(next);
+        if (next.Revision != checked(expected.Revision + 1)) throw new InvalidDataException("Invalid location revision.");
+        using var db = Open(); using var tx = db.BeginTransaction(deferred: false);
+        using var command = db.CreateCommand(); command.Transaction = tx;
+        command.CommandText = """
+            UPDATE character_locations SET map_id=$map,cell_id=$cell,direction=$direction,revision=$revision
+            WHERE character_id=$id AND map_id=$previousMap AND cell_id=$previousCell
+              AND direction=$previousDirection AND revision=$previousRevision
+              AND EXISTS(SELECT 1 FROM characters WHERE id=$id AND profile_id=$profile AND realm_id=$realm)
+            """;
+        command.Parameters.AddWithValue("$id", character); command.Parameters.AddWithValue("$profile", profile.ToString()); command.Parameters.AddWithValue("$realm", realm);
+        command.Parameters.AddWithValue("$map", next.MapId); command.Parameters.AddWithValue("$cell", next.CellId);
+        command.Parameters.AddWithValue("$direction", next.Direction); command.Parameters.AddWithValue("$revision", next.Revision);
+        command.Parameters.AddWithValue("$previousMap", expected.MapId); command.Parameters.AddWithValue("$previousCell", expected.CellId);
+        command.Parameters.AddWithValue("$previousDirection", expected.Direction); command.Parameters.AddWithValue("$previousRevision", expected.Revision);
+        if (command.ExecuteNonQuery() != 1) throw new InvalidDataException("Location ownership or revision changed.");
+        beforeCommit?.Invoke(); tx.Commit();
+    }
     private SqliteConnection Open()
     {
         var db = new SqliteConnection(new SqliteConnectionStringBuilder
