@@ -50,6 +50,21 @@ public sealed class CharacterTests : IDisposable
         var results = await Task.WhenAll(Task.Run(() => store.Create(a.Id, 290, "Alpha", Appearance)), Task.Run(() => store.Create(b.Id, 290, "ALPHA", Appearance)));
         Assert.Single(results, r => r == CharacterCreationResult.Success); Assert.Single(results, r => r == CharacterCreationResult.NameUnavailable);
     }
+    [Theory]
+    [InlineData("BEFORE")]
+    [InlineData("AFTER")]
+    public void FailedInsertRollsBackAndCanBeRetried(string timing)
+    {
+        using var profiles = new ProfileStore(root); var profile = profiles.Create("A"); var store = new CharacterStore(root);
+        using var db = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(root, "krosforge.db")); db.Open();
+        using var command = db.CreateCommand();
+        command.CommandText = $"CREATE TRIGGER fail_creation {timing} INSERT ON characters BEGIN SELECT RAISE(ABORT,'test failure'); END";
+        command.ExecuteNonQuery();
+        Assert.Throws<Microsoft.Data.Sqlite.SqliteException>(() => store.Create(profile.Id, 290, "Hero", Appearance));
+        Assert.Equal(0, store.Count(profile.Id, 290)); Assert.True(store.Available("Hero", 290));
+        command.CommandText = "DROP TRIGGER fail_creation"; command.ExecuteNonQuery();
+        Assert.Equal(CharacterCreationResult.Success, store.Create(profile.Id, 290, "Hero", Appearance));
+    }
     [Fact]
     public void DecoderRejectsTruncatedOrOversizedBlocks()
     {
