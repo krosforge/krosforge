@@ -62,9 +62,9 @@ public sealed class MovementGrid
             {
                 if (!coordinates.TryGetValue((x + Math.Sign(dx) * step, y + Math.Sign(dy) * step), out var cell)) return null;
                 var terrain = cells[cell];
-                // The local exploration policy does not infer links between distinct
-                // altitude/zone regions. Every intermediate cell must be admissible.
-                if (terrain.Altitude != origin.Altitude || terrain.Zone != origin.Zone || path.Contains(cell)) return null;
+                // A declared exploration zone connects its terrain, including elevation changes.
+                // Without a zone, changing altitude would infer an unknown terrain link.
+                if (terrain.Zone != origin.Zone || origin.Zone == 0 && terrain.Altitude != origin.Altitude || path.Contains(cell)) return null;
                 path.Add(cell);
             }
         }
