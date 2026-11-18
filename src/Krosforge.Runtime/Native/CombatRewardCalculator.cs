@@ -46,13 +46,13 @@ internal sealed class CombatRewardCalculator
         int hunter = 0, IReadOnlyList<InventoryItem>? inventory = null)
     {
         if (!victory) return new(0, []);
-        ExperienceMonster[] monsters = [new(encounter.Monster.Level, encounter.Monster.Experience)];
+        var monsters = encounter.Opponents.Select(opponent => new ExperienceMonster(opponent.Monster.Level, opponent.Monster.Experience)).ToArray();
         var shared = CombatExperience.Group([new(level)], monsters, true, 1, group);
         var earned = CombatExperience.Individual(shared, monsters, level, wisdom, level, 1, 1, 1, player);
-        var items = loot is null ? [] : loot.Roll(encounter.Monster.Definition, encounter.Monster.Grade,
+        var items = loot is null ? [] : encounter.Opponents.SelectMany(opponent => loot.Roll(opponent.Monster.Definition, opponent.Monster.Grade,
             new(level, encounter.Map, loot.ServerType, loot.Season, hunter, new HashSet<int>(), new HashSet<int>(), new HashSet<int>(), inventory ?? []),
             CombatDrops.ProspectingCoefficient(checked(prospectingScore - 100), prospecting ?? throw new InvalidOperationException("Prospecting formula missing.")),
-            settings.DropMultiplier, random, dice);
+            settings.DropMultiplier, random, dice)).ToArray();
         return new(CombatExperience.Multiply(earned, settings.ExperienceMultiplier), items);
     }
 }

@@ -40,14 +40,16 @@ internal static partial class CombatWire
     internal static byte[] Group(CombatEncounter e)
     {
         var m = e.Monster;
-        var identity = J(N(5, m.Definition), B(3, new CharacterWireCodec().Look(m.Look)), N(2, m.Grade), N(4, m.Level));
-        var roleplay = B(5, B(6, B(4, identity)));
+        byte[] Identity(CombatMonster monster) => J(N(5, monster.Definition), B(3, new CharacterWireCodec().Look(monster.Look)),
+            N(2, monster.Grade), N(4, monster.Level));
+        var group = J(new[] { B(4, Identity(m)) }.Concat(e.Companions.Select(other => B(3, Identity(other.Monster)))).ToArray());
+        var roleplay = B(5, B(6, group));
         return J(N(1, e.GroupId), B(2, J(N(3, e.GroupCell), N(4, e.Direction))),
             B(3, J(B(1, roleplay), B(2, new CharacterWireCodec().Look(m.Look)))));
     }
     internal static byte[] Fighter(CombatView view, CombatPlacement position)
     {
-        var player = position.Controlled; var monster = view.Encounter.Monster; var character = view.Character;
+        var player = position.Controlled; var monster = player ? view.Encounter.Monster : view.Encounter.MonsterFor(position.ActorId); var character = view.Character;
         var life = player ? view.Attributes.Life : monster.Life;
         var ap = player ? view.Attributes.ActionPoints : monster.ActionPoints;
         var mp = player ? view.Attributes.MovementPoints : monster.MovementPoints;
@@ -76,7 +78,7 @@ internal static partial class CombatWire
         E("jnj", J(N(10, view.Map.Id), N(12, view.Map.Subarea), B(11, J(N(1, 1), N(3, 1))))),
         E("jnv", WorldEntryWire.Reference(view.Map)),
         E("jww", J(N(2, 1), N(4, 1), N(5, view.Encounter.FightType))),
-        .. view.Positions.OrderByDescending(p => p.Controlled).Select(p => E("jwj", B(1, Fighter(view, p)))),
+        .. view.Positions.OrderByDescending(p => p.Controlled).ThenByDescending(p => p.ActorId).Select(p => E("jwj", B(1, Fighter(view, p)))),
         E("jxk", J(B(1, Zones(view.Encounter.Board)), N(2, 0))),
         E("juf", Book(view)),
         E("jxh", ControlledTeam(view))

@@ -11,7 +11,8 @@ internal sealed partial class WorldEntryService
         internal long Id { get; } = id;
         internal CombatEncounter Encounter { get; } = encounter;
         internal CombatPreparation Preparation { get; } = new(encounter.Board,
-            [new(player, 0, encounter.PlayerCell, true), new(-1, 1, encounter.MonsterCell, false, true)]);
+            new[] { new CombatPlacement(player, 0, encounter.PlayerCell, true) }
+                .Concat(encounter.Opponents.Select(m => new CombatPlacement(m.Actor, 1, m.Cell, false, true))));
         internal CombatTurns? Turns { get; set; }
         internal int? Sequence { get; set; }
         internal long Deadline { get; set; }
@@ -127,7 +128,7 @@ internal sealed partial class WorldEntryService
             if (!fight.Preparation.Start()) return;
             fight.Started = true;
             fight.StartedAt = clock.GetTimestamp();
-            if (spells is null) selection.Emit(new FightStarted([selection.Character.Id, -1]));
+            if (spells is null) selection.Emit(new FightStarted(fight.Preparation.Fighters.Select(p => p.ActorId).ToArray()));
             else StartTurns(selection, fight);
         }
     }

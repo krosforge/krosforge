@@ -11,17 +11,22 @@ internal sealed record CombatMonster(int Definition, int Grade, int Level, int L
     internal ImmutableArray<int> Spells { get; init; } = [];
 }
 internal sealed record CombatReward(long Currency, bool RestoreFullLife);
+internal sealed record CombatOpponent(long Actor, int Cell, CombatMonster Monster);
 internal sealed record CombatEncounter(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
     int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, CombatBoard Board)
 {
     internal CombatReward Reward { get; init; } = new(0, true);
+    internal ImmutableArray<CombatOpponent> Companions { get; init; } = [];
+    internal IEnumerable<CombatOpponent> Opponents => new[] { new CombatOpponent(-1, MonsterCell, Monster) }.Concat(Companions);
+    internal CombatMonster MonsterFor(long actor) => Opponents.Single(opponent => opponent.Actor == actor).Monster;
 }
 
 internal sealed class CombatCatalog
 {
     private sealed record Source(string Path, string Sha256);
+    private sealed record Companion(int Cell, int MonsterId, int Grade);
     private sealed record Definition(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
-        int FightType, int PlayerCell, int MonsterCell, int MonsterId, int Grade, CombatReward Reward);
+        int FightType, int PlayerCell, int MonsterCell, int MonsterId, int Grade, CombatReward Reward, Companion[]? Companions = null);
     private sealed record Configuration(string Build, Source Monsters, Source Calendar, Definition[] Encounters);
     internal IReadOnlyList<CombatEncounter> Encounters { get; }
     internal int? NeutralCalendar { get; }
@@ -38,24 +43,34 @@ internal sealed class CombatCatalog
             .Select(row => Number(row, "id")).Where(id => id > 0).Order().Cast<int?>().FirstOrDefault()
             ?? throw new InvalidDataException("No neutral calendar presentation is available.");
         var monsters = CreationDataReader.Read(Path.Combine(root, config.Monsters.Path), config.Monsters.Sha256, maxOutput: 16777216,
-                selectedKeys: config.Encounters.Select(e => (long)e.MonsterId).ToHashSet())
+                selectedKeys: config.Encounters.SelectMany(e => new[] { e.MonsterId }.Concat((e.Companions ?? []).Select(c => c.MonsterId)))
+                    .Select(id => (long)id).ToHashSet())
             .ToDictionary(row => Number(row, "id"));
+        CombatMonster ReadMonster(int id, int gradeId)
+        {
+            var monster = monsters[id];
+            var grade = Rows(monster, "grades").Single(row => Number(row, "grade") == gradeId);
+            return new(id, gradeId, Number(grade, "level"), Number(grade, "lifePoints"),
+                Number(grade, "actionPoints"), Number(grade, "movementPoints"), ParseLook((string)monster["look"]))
+            {
+                Experience = Convert.ToInt64(grade["xp"], CultureInfo.InvariantCulture),
+                Statistics = CombatSpellCatalog.Statistics(grade),
+                Spells = ((object[])((Dictionary<string, object>)monster["spells"]).Single().Value)
+                    .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToImmutableArray()
+            };
+        }
         Encounters = config.Encounters.Select(definition =>
         {
             var map = world.Map(definition.Map);
             var board = map.Combat ?? throw new InvalidDataException("Combat geometry missing.");
-            var monster = monsters[definition.MonsterId];
-            var grade = Rows(monster, "grades").Single(row => Number(row, "grade") == definition.Grade);
             return new CombatEncounter(map.Id, definition.GroupId, definition.GroupCell, definition.Direction, definition.AttackDistance,
                 definition.FightType, definition.PlayerCell, definition.MonsterCell,
-                new(definition.MonsterId, definition.Grade, Number(grade, "level"), Number(grade, "lifePoints"),
-                    Number(grade, "actionPoints"), Number(grade, "movementPoints"), ParseLook((string)monster["look"]))
-                {
-                    Experience = Convert.ToInt64(grade["xp"], CultureInfo.InvariantCulture),
-                    Statistics = CombatSpellCatalog.Statistics(grade),
-                    Spells = ((object[])((Dictionary<string, object>)monster["spells"]).Single().Value)
-                        .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToImmutableArray()
-                }, board) { Reward = definition.Reward };
+                ReadMonster(definition.MonsterId, definition.Grade), board)
+            {
+                Reward = definition.Reward,
+                Companions = (definition.Companions ?? []).Select((companion, index) =>
+                    new CombatOpponent(-2L - index, companion.Cell, ReadMonster(companion.MonsterId, companion.Grade))).ToImmutableArray()
+            };
         }).ToArray();
         Validate(world);
     }
@@ -66,11 +81,14 @@ internal sealed class CombatCatalog
         foreach (var e in Encounters)
         {
             if (e.GroupId >= -1 || e.Direction is < 0 or > 7 || e.AttackDistance is < 1 or > 560 || e.FightType is < 0 or > 10 ||
-                !world.Map(e.Map).WalkableCells.Contains(e.GroupCell) || e.Monster.Definition <= 0 || e.Monster.Grade <= 0 ||
-                e.Monster.Level <= 0 || e.Monster.Life <= 0 || e.Monster.ActionPoints <= 0 || e.Monster.MovementPoints < 0 ||
+                !world.Map(e.Map).WalkableCells.Contains(e.GroupCell) || e.Companions.IsDefault || e.Companions.Length > 7 ||
+                e.Opponents.Select(m => m.Actor).Distinct().Count() != e.Companions.Length + 1 ||
+                e.Opponents.Any(m => m.Actor >= 0 || m.Monster.Definition <= 0 || m.Monster.Grade <= 0 ||
+                    m.Monster.Level <= 0 || m.Monster.Life <= 0 || m.Monster.ActionPoints <= 0 || m.Monster.MovementPoints < 0) ||
                 e.Reward is null || e.Reward.Currency < 0 || !e.Reward.RestoreFullLife)
                 throw new InvalidDataException("Invalid encounter configuration.");
-            _ = new CombatPreparation(e.Board, [new(1, 0, e.PlayerCell, true), new(-1, 1, e.MonsterCell, false, true)]);
+            _ = new CombatPreparation(e.Board, new[] { new CombatPlacement(1, 0, e.PlayerCell, true) }
+                .Concat(e.Opponents.Select(m => new CombatPlacement(m.Actor, 1, m.Cell, false, true))));
         }
     }
     private static int Number(Dictionary<string, object> row, string key) => Convert.ToInt32(row[key], CultureInfo.InvariantCulture);

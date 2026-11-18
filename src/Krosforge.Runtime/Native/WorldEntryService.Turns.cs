@@ -23,14 +23,19 @@ internal sealed partial class WorldEntryService
     private void StartTurns(Selection selection, FightSession fight)
     {
         if (spells is null) return;
-        var attributes = selection.Attributes; var monster = fight.Encounter.Monster;
+        var attributes = selection.Attributes;
+        CombatFighter Opponent(CombatPlacement position)
+        {
+            var monster = fight.Encounter.MonsterFor(position.ActorId);
+            return new(position.ActorId, position.Team, false, position.Cell, monster.Life, monster.Life,
+                monster.ActionPoints, monster.ActionPoints, monster.MovementPoints, monster.MovementPoints,
+                monster.Statistics, spells.Monster(monster.Spells));
+        }
         fight.Turns = new(fight.Encounter.Board, fight.Preparation.Fighters.Select(position => position.Controlled
             ? new CombatFighter(position.ActorId, position.Team, true, position.Cell, attributes.Life, attributes.Life,
                 attributes.ActionPoints, attributes.ActionPoints, attributes.MovementPoints, attributes.MovementPoints,
                 CombatStatistics.Empty, spells.Player(selection.Character.BreedId))
-            : new CombatFighter(position.ActorId, position.Team, false, position.Cell, monster.Life, monster.Life,
-                monster.ActionPoints, monster.ActionPoints, monster.MovementPoints, monster.MovementPoints,
-                monster.Statistics, spells.Monster(monster.Spells))));
+            : Opponent(position)));
         selection.Emit(new FightStarted(fight.Turns.Order));
         PublishTurn(selection, fight, false);
         fight.Tick = RunCombatClock(selection, fight);

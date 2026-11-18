@@ -59,7 +59,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                     var world = new WorldEntryCatalog(target);
                     var characters = new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target), world.Experience);
                     var encounters = new CombatCatalog(target, world);
-                    rewards = new CombatRewardCalculator(target, server, encounters.Encounters.Select(encounter => encounter.Monster.Definition));
+                    rewards = new CombatRewardCalculator(target, server, encounters.Encounters.SelectMany(encounter => encounter.Opponents).Select(opponent => opponent.Monster.Definition));
                     diagnostics ??= new SessionDiagnostics(dataRoot);
                     host = new LocalSessionHost(diagnostic: diagnostics.Write, characters: characters,
                         worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), world, combat: encounters,

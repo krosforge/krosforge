@@ -90,8 +90,10 @@ public sealed partial class WorldSessionTests
         await a.AttackWait.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         if (disconnect) Assert.Null(a.Fight); else Assert.NotNull(a.Fight);
     }
-    [Fact]
-    public async Task TcpPreparationPlacementReadinessAndForfeitRestoreRoleplay()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TcpPreparationPlacementReadinessAndForfeitRestoreRoleplay(bool multipleMonsters)
     {
         var root = Path.Combine(Path.GetTempPath(), "combat-tcp-" + Guid.NewGuid().ToString("N"));
         try
@@ -99,7 +101,12 @@ public sealed partial class WorldSessionTests
             using var profiles = new ProfileStore(root); var profile = profiles.Create("Alpha");
             var store = new CharacterStore(root); var id = CreateCharacter(store, profile.Id, "Hero");
             var catalog = CombatWorld(); var locations = new LocationStore(root);
-            var service = new WorldEntryService(new(store, SyntheticCatalog()), locations, catalog, combat: Encounters(catalog, 1));
+            var encounter = Encounters(catalog, 1).Encounters.Single();
+            if (multipleMonsters) encounter = encounter with
+            {
+                Companions = [new(-2, 4, encounter.Monster with { Definition = 8, Grade = 2, Level = 3, Look = new(10, [], [], [110]) })]
+            };
+            var service = new WorldEntryService(new(store, SyntheticCatalog()), locations, catalog, combat: new(catalog, encounter));
             await using var host = new LocalSessionHost(characters: new(store, SyntheticCatalog()), worldEntry: service);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(15)); var token = timeout.Token;
@@ -124,6 +131,16 @@ public sealed partial class WorldSessionTests
             var fightDetails = ProtoObject.Read(ProtoObject.Read(enemy.Bytes(3), 128).Bytes(4), 128);
             var identity = ProtoObject.Read(ProtoObject.Read(fightDetails.Bytes(6), 128).Bytes(3), 128);
             Assert.Equal(7UL, identity.UInt64(3)); Assert.Equal(1UL, identity.UInt64(1)); Assert.Equal(1UL, identity.UInt64(2));
+            if (multipleMonsters)
+            {
+                var companion = ProtoObject.Read((await Event(world, "jwj", token)).Bytes(1), 128);
+                Assert.Equal(unchecked((ulong)-2L), companion.UInt64(1));
+                Assert.Equal(4UL, ProtoObject.Read(companion.Bytes(2), 128).UInt64(3));
+                var companionDetails = ProtoObject.Read(companion.Bytes(3), 128);
+                Assert.Equal(10UL, ProtoObject.Read(companionDetails.Bytes(2), 128).UInt64(1));
+                var companionIdentity = ProtoObject.Read(ProtoObject.Read(ProtoObject.Read(companionDetails.Bytes(4), 128).Bytes(6), 128).Bytes(3), 128);
+                Assert.Equal(8UL, companionIdentity.UInt64(3)); Assert.Equal(2UL, companionIdentity.UInt64(1)); Assert.Equal(3UL, companionIdentity.UInt64(2));
+            }
             var zones = ProtoObject.Read((await Event(world, "jxk", token)).Bytes(1), 128);
             Assert.Equal(new byte[] { 3,4,5 }, zones.Bytes(1)); Assert.Equal(new byte[] { 0,1,2 }, zones.Bytes(2));
             Assert.Equal((ulong)id, (await Event(world, "juf", token)).UInt64(6));

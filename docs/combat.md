@@ -4,6 +4,8 @@ The runtime reads monster appearance, grade, level and basic attributes from the
 
 The runtime also selects the lowest installed calendar record with an empty bonus list. It initializes the native monster tooltip with a neutral local calendar; it does not reproduce the official seasonal schedule.
 
+An encounter can define up to eight opponents, each with a distinct negative fight identity, native monster definition, grade, appearance, attributes and placement. Optional `Companions` entries in the encounter catalog add monsters beside its leader. Preparation and turn execution retain every opponent; victory and rewards wait until the entire hostile side is defeated. XP includes all defeated opponents, and each contributes its eligible loot rolls to the same durable award. This mechanism does not establish the official composition, density or respawn schedule of a map.
+
 Combat terrain comes from the installed map geometry. The low nibble of `linkedZone` identifies the combat zone; exploration continues to use the high nibble. Native red and blue cell flags define the two placement sets. Initial positions must belong to their respective teams and cannot overlap. The catalog rejects unknown creature grades, unsupported appearance formats and invalid placement instead of silently substituting content.
 
 ## Encounter and preparation lifecycle
