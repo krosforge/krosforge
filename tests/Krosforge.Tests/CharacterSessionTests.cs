@@ -72,10 +72,39 @@ public sealed partial class WorldSessionTests
             while (store.Count(profile.Id, 290) != (deletion ? 0 : 1)) await Task.Delay(10, token);
             world.Client.LingerState = new LingerOption(true, 0); world.Dispose();
             await disconnected.Task.WaitAsync(token);
-            using var fresh = new TcpClient(); await Login(host, fresh, session.IssueTicket(), token);
+            using var fresh = new TcpClient();
+            var account = ProtoObject.Read((await Login(host, fresh, session.IssueTicket(), token)).Bytes(1), 128);
+            var realms = ProtoObject.Read(account.Bytes(4), 128);
+            var realm = ProtoObject.Read(Assert.Single(realms.Repeated(1)).Bytes, 128);
+            Assert.Equal(0UL, realm.UInt64(2)); // Online, independently of the roster size.
+            var summaries = realm.Repeated(3).ToArray();
+            Assert.Equal(deletion ? 0 : 1, summaries.Length);
+            if (!deletion)
+                Assert.Equal(Convert.FromHexString("0A044865726F1000180020012A14313937302D30312D30315430303A30303A30305A"), summaries[0].Bytes);
             Assert.Equal(deletion ? 0 : 1, new CharacterStore(root).Count(profile.Id, 290));
         }
         finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(9, 8)]
+    [InlineData(18, 17)]
+    [InlineData(20, 18)]
+    public void ConnectionSummaryKeepsRealmOnlineAndUsesConnectionBreedEnum(int breed, int ordinal)
+    {
+        var character = new CharacterWire(7, "Élodie", breed, 1, 101, 202, 1, new(1, [], [], []));
+        var response = ProtoObject.Read(ConnectionAuthentication.Accepted(new(Guid.NewGuid(), "Account", 1), [character]), 128);
+        var account = ProtoObject.Read(response.Bytes(1), 128);
+        var collection = ProtoObject.Read(account.Bytes(4), 128);
+        var realm = ProtoObject.Read(Assert.Single(collection.Repeated(1)).Bytes, 128);
+        Assert.Equal(0UL, realm.UInt64(2));
+        var summary = ProtoObject.Read(Assert.Single(realm.Repeated(3)).Bytes, 128);
+        Assert.Equal("Élodie", summary.Text(1));
+        Assert.Equal((ulong)ordinal, summary.UInt64(2));
+        Assert.Equal(1UL, summary.UInt64(3));
+        Assert.Equal(1UL, summary.UInt64(4));
+        Assert.Equal("1970-01-01T00:00:00Z", summary.Text(5));
     }
 
     // Fixed synthetic protobuf records, derived independently of CharacterWireCodec.

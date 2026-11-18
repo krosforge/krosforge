@@ -15,3 +15,19 @@ Reference client: 3.7.14.18. Metadata SHA-256: `781890cf890114c5231b5bf04595acbc
 | `kzu` | bone 1, packed skins 3, packed indexed colors 5, packed scales 6 |
 
 Both fixture variants represent ID 1, name Élodie, level 1, breed 2, head 101, body 202, bone 7, skins [901,902,801], scale 110, and colors [0,1,0x123456,0xabcdef,0xffffff,0x800000]. Only gender differs (0/1). Look colors include their 1-based channel in bits 24 and above; appearance colors contain RGB alone. Inputs carry ID 900 to detect accidental trust of client identities. Complete fixed-byte comparison covers every field in both appearance representations, after creation and on a fresh roster request. An intentional field-order change requires reviewing this strict fixture; protobuf itself permits different field ordering.
+
+## Connection summaries
+
+The same pinned metadata declares `mgg` fields 1 (descriptor), 2 (status),
+3 (repeated summary), and `mgt` fields 1–5. The historical consumer contract
+maps those summary fields to name, class ordinal, gender, level and an ISO
+last-access date. Its enum `mgt.mgs.mgr` has values 0–18 in this build.
+Catalog classes 1–18 map to ordinals 0–17; catalog class 20 maps to 18.
+These are not catalog IDs. Status zero means online; sending the roster size
+as status changes server availability as characters are created.
+
+The fixed `Hero` record in the socket-loss/re-authentication test verifies
+that a committed creation appears in the connection summary, a committed
+deletion disappears, and both leave the realm online. Boundary enum tests
+cover catalog IDs 1, 9, 18 and 20. Native observation separately validates
+server availability, count, class portrait and navigation.

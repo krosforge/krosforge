@@ -5,7 +5,6 @@ namespace Krosforge.Runtime.Native;
 
 internal sealed class CharacterService(CharacterStore store, CreationCatalog catalog)
 {
-    internal int Count(Guid profile) => store.Count(profile, ServerPresentation.RealmId);
     internal CharacterWire[] List(Guid profile) => store.List(profile, ServerPresentation.RealmId).Select(c =>
     {
         var a = c.Appearance;

@@ -22,7 +22,7 @@ internal static class ConnectionAuthentication
         if (ticket.Length is < 1 or > 4096) throw new ProtocolException("Ticket extent rejected.");
         return ticket;
     }
-    internal static byte[] Accepted(Profile profile, int characterCount = 0)
+    internal static byte[] Accepted(Profile profile, IReadOnlyList<CharacterWire>? characters = null)
     {
         var collection = new ArrayBufferWriter<byte>();
         foreach (var id in new[] { ServerPresentation.RealmId })
@@ -33,7 +33,26 @@ internal static class ConnectionAuthentication
             ProtoWriter.UInt64(descriptor, 3, 1);
             var realm = new ArrayBufferWriter<byte>();
             ProtoWriter.Bytes(realm, 1, descriptor.WrittenSpan);
-            ProtoWriter.UInt64(realm, 2, (ulong)characterCount);
+            // mgg field 2 is the realm status (0 = online), not a character count.
+            ProtoWriter.UInt64(realm, 2, 0);
+            foreach (var character in characters ?? [])
+            {
+                var summary = new ArrayBufferWriter<byte>();
+                ProtoWriter.Bytes(summary, 1, Encoding.UTF8.GetBytes(character.Name));
+                // mgt.mgs.mgr is a connection enum, distinct from the catalog ID.
+                var breed = character.BreedId switch
+                {
+                    >= 1 and <= 18 => character.BreedId - 1,
+                    20 => 18,
+                    _ => throw new ProtocolException("Unsupported summary breed.")
+                };
+                ProtoWriter.UInt64(summary, 2, (ulong)breed);
+                ProtoWriter.UInt64(summary, 3, (ulong)character.Gender);
+                ProtoWriter.UInt64(summary, 4, (ulong)character.Level);
+                // No world-access history exists yet. The consumer parses an ISO date.
+                ProtoWriter.Bytes(summary, 5, "1970-01-01T00:00:00Z"u8);
+                ProtoWriter.Bytes(realm, 3, summary.WrittenSpan);
+            }
             ProtoWriter.Bytes(collection, 1, realm.WrittenSpan);
         }
         var quota = new ArrayBufferWriter<byte>();

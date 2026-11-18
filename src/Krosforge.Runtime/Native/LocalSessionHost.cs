@@ -246,7 +246,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
                     if (session is null) throw new ProtocolException("Ticket rejected.");
                     await Task.Delay(250, deadline.Token);
                     session.Token.ThrowIfCancellationRequested();
-                    payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.Accepted(session.Profile, characters?.Count(session.Profile.Id) ?? 0));
+                    payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.Accepted(session.Profile, characters?.List(session.Profile.Id)));
                 }
                 else if (request.Operation == ConnectionAuthentication.SelectRealm)
                 {
