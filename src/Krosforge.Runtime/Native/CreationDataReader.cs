@@ -30,10 +30,11 @@ internal static class CreationDataReader
     private sealed record Node(int Level, int Flags, string Type, string Name, int Size, int Meta);
     private sealed record Type(int Class, Node[] Nodes);
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    internal static Dictionary<string, object>[] Read(string path, string hash, bool includeKeys = false, int maxOutput = 4194304, IReadOnlySet<long>? selectedKeys = null)
+    internal static Dictionary<string, object>[] Read(string path, string hash, bool includeKeys = false, int maxOutput = 4194304, IReadOnlySet<long>? selectedKeys = null, int maxInput = 1048576)
     {
+        if (maxInput is < 1 or > 4194304) throw new ArgumentOutOfRangeException(nameof(maxInput));
         SafePaths.CheckTree(Path.GetDirectoryName(path)!);
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 || new FileInfo(path).Length > 1048576) throw new InvalidDataException("Invalid catalog file.");
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 || new FileInfo(path).Length > maxInput) throw new InvalidDataException("Invalid catalog file.");
         var raw = File.ReadAllBytes(path);
         if (Convert.ToHexStringLower(SHA256.HashData(raw)) != hash) throw new InvalidDataException("Unsupported client catalog.");
         if (maxOutput is < 1 or > 67108864) throw new ArgumentOutOfRangeException(nameof(maxOutput));

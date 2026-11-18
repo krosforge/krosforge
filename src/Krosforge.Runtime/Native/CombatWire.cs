@@ -6,7 +6,7 @@ using Krosforge.Runtime.Native.Protocol.Protobuf;
 namespace Krosforge.Runtime.Native;
 
 // Compatibility fields independently checked in build 3.7.14.18 metadata.
-internal static class CombatWire
+internal static partial class CombatWire
 {
     private static byte[] N(int tag, long value) => WorldProtocol.Number(tag, unchecked((ulong)value));
     private static byte[] B(int tag, byte[] value) => WorldProtocol.Bytes(tag, value);
@@ -55,7 +55,8 @@ internal static class CombatWire
         byte[] Simple(int id, int value) => B(4, J(N(2, id), B(3, N(2, value))));
         byte[] Usable(int id, int value) => B(4, J(N(2, id), B(1, J(N(4, value), N(7, 0)))));
         var common = J(N(1, 2), Usable(0, life), Simple(95, life), Simple(96, 0), Simple(97, 0), Simple(102, 0),
-            Simple(5, level), Usable(1, ap), Usable(23, mp));
+            Simple(5, level), Usable(1, ap), Usable(23, mp),
+            J(Attributes(player ? CombatStatistics.Empty : monster.Statistics).Select(entry => B(4, entry)).ToArray()));
         var identity = player
             ? B(5, J(N(2, level), B(4, Encoding.UTF8.GetBytes(character.Name)), B(1, J(N(2, character.BreedId), N(4, character.Gender), N(6, level)))))
             : B(6, B(3, J(N(1, monster.Grade), N(2, level), N(3, monster.Definition))));
@@ -71,7 +72,7 @@ internal static class CombatWire
         E("jww", J(N(2, 1), N(4, 1), N(5, view.Encounter.FightType))),
         .. view.Positions.OrderByDescending(p => p.Controlled).Select(p => E("jwj", B(1, Fighter(view, p)))),
         E("jxk", J(B(1, Zones(view.Encounter.Board)), N(2, 0))),
-        E("juf", N(6, view.Character.Id))
+        E("juf", Book(view))
     ];
     internal static byte[][] Events(WorldNotice notice) => notice switch
     {
@@ -81,6 +82,10 @@ internal static class CombatWire
         FightLoaded loaded => Load(loaded.View),
         FightPositions changed => [E("jws", J(changed.Positions.Select(p => B(2, J(N(2, p.ActorId), N(3, p.Cell)))).ToArray()))],
         FightStarted started => [E("jxr", []), E("jvu", J(started.Order.Select(id => B(1, B(2, J(N(1, id), B(3, []))))).ToArray()))],
+        FightTurn turn => TurnEvents(turn),
+        FightAction action => ActionEvents(action),
+        FightTurnEnding => [E("jug", [])],
+        FightActionRejected => [],
         FightLeft left => [E("kjy", []), E("kjp", WorldEntryWire.Context()), E("jow", N(1, left.Map))],
         _ => throw new ArgumentOutOfRangeException(nameof(notice))
     };

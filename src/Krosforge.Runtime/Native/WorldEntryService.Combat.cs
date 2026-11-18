@@ -2,7 +2,7 @@ using Krosforge.Core;
 namespace Krosforge.Runtime.Native;
 
 internal sealed record CombatView(long Id, EntryMap Map, CombatEncounter Encounter, CharacterWire Character,
-    EntryAttributes Attributes, IReadOnlyList<CombatPlacement> Positions);
+    EntryAttributes Attributes, IReadOnlyList<CombatPlacement> Positions, IReadOnlyList<CombatSpell>? Spells = null);
 
 internal sealed partial class WorldEntryService
 {
@@ -12,6 +12,16 @@ internal sealed partial class WorldEntryService
         internal CombatEncounter Encounter { get; } = encounter;
         internal CombatPreparation Preparation { get; } = new(encounter.Board,
             [new(player, 0, encounter.PlayerCell, true), new(-1, 1, encounter.MonsterCell, false, true)]);
+        internal CombatTurns? Turns { get; set; }
+        internal int? Sequence { get; set; }
+        internal long Deadline { get; set; }
+        internal long AnimationDeadline { get; set; }
+        internal long ReadyDeadline { get; set; }
+        internal long AutomaticAt { get; set; }
+        internal bool EndRequested { get; set; }
+        internal bool AwaitingReady { get; set; }
+        internal CancellationTokenSource Lifetime { get; } = new();
+        internal Task Tick { get; set; } = Task.CompletedTask;
         internal bool Loaded { get; set; }
         internal bool Started { get; set; }
     }
@@ -89,7 +99,7 @@ internal sealed partial class WorldEntryService
     {
         var fight = selection.Fight!;
         if (map != fight.Encounter.Map || fight.Started) throw new InvalidDataException("Fight map load does not match preparation.");
-        selection.Emit(new FightLoaded(new(fight.Id, selection.Map, fight.Encounter, selection.Character, selection.Attributes, fight.Preparation.Fighters)));
+        selection.Emit(new FightLoaded(new(fight.Id, selection.Map, fight.Encounter, selection.Character, selection.Attributes, fight.Preparation.Fighters, spells?.Player(selection.Character.BreedId))));
         fight.Loaded = true;
     }
     internal void Place(Selection selection, long actor, int cell)
@@ -111,7 +121,8 @@ internal sealed partial class WorldEntryService
             if (selection.Fight is not { Loaded: true, Started: false } fight || !fight.Preparation.SetReady(selection.Character.Id, ready)) return;
             if (!fight.Preparation.Start()) return;
             fight.Started = true;
-            selection.Emit(new FightStarted([selection.Character.Id, -1]));
+            if (spells is null) selection.Emit(new FightStarted([selection.Character.Id, -1]));
+            else StartTurns(selection, fight);
         }
     }
     internal void Forfeit(Selection selection)
@@ -130,6 +141,7 @@ internal sealed partial class WorldEntryService
     {
         if (selection.Fight is not { } fight) return;
         selection.Fight = null;
+        fight.Lifetime.Cancel(); fight.Lifetime.Dispose();
         fight.Preparation.Abandon();
         if (claimedGroups.TryGetValue(fight.Encounter.GroupId, out var owner) && ReferenceEquals(owner, selection))
         {
