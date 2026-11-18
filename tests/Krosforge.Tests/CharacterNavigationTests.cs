@@ -97,6 +97,12 @@ public sealed class CharacterNavigationTests : IDisposable
         await CharacterNavigation.ApplyValidatedAsync(FilePath, ClientCompatibility.Hashes["GameAssembly.dll"],
             CharacterNavigation.PatchedHash, CharacterNavigation.Patches, TestContext.Current.CancellationToken);
         Assert.Equal(CharacterNavigation.PatchedHash, Hash(await File.ReadAllBytesAsync(FilePath, TestContext.Current.CancellationToken)));
+        // Independent native control-flow contract: forced Back targets the list
+        // renderer, while creation can still take the automatic-selection branch.
+        var assembly = await File.ReadAllBytesAsync(FilePath, TestContext.Current.CancellationToken);
+        Assert.Equal(0x75, assembly[32519623]); // JNE for the forced-return flag
+        Assert.Equal(32519679, 32519625 + (sbyte)assembly[32519624]);
+        Assert.Equal(new byte[] { 0x75, 0x4f }, assembly[32519677..32519679]);
         using var original = File.OpenRead(Path.Combine(installation!, "GameAssembly.dll"));
         Assert.Equal(ClientCompatibility.Hashes["GameAssembly.dll"], Convert.ToHexStringLower(SHA256.HashData(original)));
     }

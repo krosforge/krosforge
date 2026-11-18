@@ -5,15 +5,15 @@ namespace Krosforge.Runtime.Native;
 // See docs/native-client.md for the native consumers and recovery contract.
 internal static class CharacterNavigation
 {
-    internal const string PatchedHash = "e97e15af3ac1b45df787870d364b35deef206965839a5a52f5ab01a57ece79e4";
+    internal const string PatchedHash = "e51305f154af33fe0fb71584f105847b9e90ff88f074232eace4323d3f2ae7d4";
     internal sealed record Patch(int Offset, string Expected, string Replacement);
     internal static readonly Patch[] Patches =
     [
         // Selection rejection: clear only the pending selection, retaining the roster.
         new(25442635, "33d2488bcf488b6c2430488b5c2438488b7424404883c4205fe957e2ffff",
             "33c048898790000000488b6c2430488b5c2438488b7424404883c4205fc3"),
-        // A roster-display event displays the roster instead of selecting an entry.
-        new(32519677, "754f", "9090"),
+        // A forced return displays the roster; normal creation keeps automatic entry.
+        new(32519623, "752d", "7536"),
         // Server handoff opens the roster. Creation's separate selection path stays intact.
         new(25421203, "e8f8530000", "33c0909090"),
         // Back from creation: carry the roster into the display event, including
