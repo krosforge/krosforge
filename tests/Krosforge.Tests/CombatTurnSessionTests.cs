@@ -34,6 +34,7 @@ public sealed partial class WorldSessionTests
             await Send(world, "kjt", WorldProtocol.Number(1, 100), token);
             foreach (var type in new[] { "jnj", "jnv", "jww", "jwj", "jwj", "jxk" }) await Event(world, type, token);
             var book = await Event(world, "juf", token);
+            await Event(world, "jxh", token);
             Assert.Equal(1UL, ProtoObject.Read(Assert.Single(book.Repeated(5)).Bytes, 128).UInt64(2));
             await Send(world, "jxj", [8, 1], token);
             foreach (var type in new[] { "jxr", "jvu", "krg", "jvi" }) await Event(world, type, token);
