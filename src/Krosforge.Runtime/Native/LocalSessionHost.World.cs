@@ -122,7 +122,7 @@ internal sealed partial class LocalSessionHost
                             continue;
                         case "jok" when selected is { MapReady: true }:
                             var movement = WorldMovementWire.Read(request.Payload);
-                            diagnostic?.Invoke($"world-path map={movement.Map} cells={string.Join(',', movement.TurningCells)}");
+                            diagnostic?.Invoke($"world-path actor={selected.Character.Id} map={movement.Map} cells={string.Join(',', movement.TurningCells)}");
                             worldEntry!.Move(selected, movement);
                             continue;
                         case "jny" when selected is { MapReady: true }:
@@ -133,7 +133,7 @@ internal sealed partial class LocalSessionHost
                             continue;
                         case "jpj" when selected is { MapReady: true }:
                             var cancellation = WorldMovementWire.Cancellation(request.Payload);
-                            diagnostic?.Invoke($"world-cancel cell={cancellation}");
+                            diagnostic?.Invoke($"world-cancel actor={selected.Character.Id} cell={cancellation}");
                             worldEntry!.Cancel(selected, cancellation);
                             continue;
                         case "joc" when selected is { MapReady: true }:

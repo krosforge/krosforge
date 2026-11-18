@@ -11,6 +11,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
     private readonly ConcurrentDictionary<Guid, LaunchJob> jobs = new();
     private readonly SemaphoreSlim preparation = new(1);
     private LocalSessionHost? host;
+    private SessionDiagnostics? diagnostics;
     private bool configured;
     private string? appliedServerName;
     internal bool IsActive(Guid profileId) => jobs.TryGetValue(profileId, out var job) && job.Active;
@@ -55,7 +56,8 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                 if (host is null)
                 {
                     var characters = new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target));
-                    host = new LocalSessionHost(diagnostic: new SessionDiagnostics(dataRoot).Write, characters: characters,
+                    diagnostics ??= new SessionDiagnostics(dataRoot);
+                    host = new LocalSessionHost(diagnostic: diagnostics.Write, characters: characters,
                         worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), new WorldEntryCatalog(target)));
                 }
                 if (!configured)
@@ -159,6 +161,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
             job.Cancellation.Dispose();
         }
         host?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        diagnostics?.Dispose();
         preparation.Dispose();
     }
     private sealed class ProgressSink(Action<CopyProgress> report) : IProgress<CopyProgress>
