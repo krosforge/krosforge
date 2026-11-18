@@ -1,0 +1,17 @@
+# Local world entry
+
+Selecting an owned character acquires an exclusive runtime selection until its game connection returns or closes. A selection has a distinct connection identity; releasing an old selection cannot remove its replacement. A different profile, deleted character, or concurrent selection cannot acquire the character. Socket failure after a committed location does not erase it.
+
+The runtime sends selection acceptance, a roleplay context, the map load, an explicitly empty inventory and initial attributes. The client then requests information for that exact map. The response contains the selected character's persisted appearance, account identity, cell and direction. A different map identifier is rejected. This entry contract does not imply movement, combat, inventory gameplay or mutual account visibility.
+
+`Native/world-entry.json` is the versioned local configuration. Its initial location and life/AP/MP policy are reconstructed local choices, not a claim of official server behavior. Map geometry, subarea and experience thresholds are read from the hash-pinned reference installation. The managed reader uses the embedded schemas and retains only the requested map geometry; assets are neither extracted to disk nor distributed. Saved locations outside the supported map or walkable cells cause an explicit failure instead of a silent reset.
+
+## Database migration and recovery
+
+Schema 2 adds `character_locations` with a cascading character foreign key, map, cell, direction and revision. Existing profiles, characters, appearances and settings remain unchanged. A character without a location acquires its configured initial position on first valid entry, once. An existing location is validated and restored.
+
+Before migrating schema 1, an immediate SQLite transaction excludes competing writers. A separate read connection backs up the last committed database, including WAL contents, into `Krosforge-data/backups/schema-1-before-2-<id>.db`. The backup is checked for integrity and schema version, flushed and promoted before schema changes commit. Backup failure aborts migration. An interrupted transaction rolls back; retry can create another backup. Fresh databases start at schema 2 without a legacy backup. Future schema versions are rejected before journal settings are changed.
+
+An older executable cannot open schema 2. To restore a pre-migration installation, close every native window and the runtime, preserve the entire current data directory, and restore the selected schema-1 backup into a separate data directory as `krosforge.db`. Do not combine the restored database with WAL/SHM files from the newer database. That restored copy represents the backup time and omits later changes. Downgrading also requires a client copy compatible with the older executable; see [native-client compatibility](native-client.md#character-navigation-compatibility). This is an explicit recovery procedure, not automatic schema downgrade.
+
+Automated checks cover migration, backup failure, rollback, concurrent initial locations, ownership, deletion, stale selection cleanup and TCP disconnection/reentry. [The wire fixture](../tests/Krosforge.Tests/Fixtures/world-entry-contract.md) records independently recovered field tags. Native acceptance and its remaining limitations belong in the PR and release notes.

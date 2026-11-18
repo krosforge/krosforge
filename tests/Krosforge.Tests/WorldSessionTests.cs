@@ -30,7 +30,7 @@ public sealed partial class WorldSessionTests
         Assert.Equal(WorldProtocol.Prefix + type, any.Text(1));
         return ProtoObject.Read(any.Bytes(2, false), 128);
     }
-    private static async Task<TcpClient> Enter(LocalSessionHost host, TcpClient connection, CancellationToken token)
+    private static async Task<TcpClient> Enter(LocalSessionHost host, TcpClient connection, CancellationToken token, bool emptyRoster = true)
     {
         var selected = await Connection(connection, 4, WorldProtocol.Number(1, 290), token);
         var endpoint = ProtoObject.Read(selected.Bytes(1), 128);
@@ -41,7 +41,7 @@ public sealed partial class WorldSessionTests
         await Send(world, "knc", WorldProtocol.Join(S(1, endpoint.Text(1)), S(2, "en")), token);
         await Event(world, "knh", token);
         await Send(world, "ksj", [], token); await Event(world, "ksk", token);
-        await Send(world, "ksu", [], token); (await Event(world, "ksv", token)).Only();
+        await Send(world, "ksu", [], token); var roster = await Event(world, "ksv", token); if (emptyRoster) roster.Only();
         return world;
     }
     [Fact]

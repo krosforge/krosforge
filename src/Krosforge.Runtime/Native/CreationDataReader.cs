@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 namespace Krosforge.Runtime.Native;
 
-// Restricted reader for hash-pinned UnityFS 8 / serialized v22 creation catalogs.
+// Restricted reader for hash-pinned UnityFS 8 / serialized v22 catalogs and map geometry.
 // Reads embedded schemas; never loads client code or extracts files to disk.
 internal static class CreationDataReader
 {
@@ -30,27 +30,36 @@ internal static class CreationDataReader
     private sealed record Node(int Level, int Flags, string Type, string Name, int Size, int Meta);
     private sealed record Type(int Class, Node[] Nodes);
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    internal static Dictionary<string, object>[] Read(string path, string hash)
+    internal static Dictionary<string, object>[] Read(string path, string hash, bool includeKeys = false)
     {
         SafePaths.CheckTree(Path.GetDirectoryName(path)!);
         if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 || new FileInfo(path).Length > 1048576) throw new InvalidDataException("Invalid catalog file.");
         var raw = File.ReadAllBytes(path);
-        if (Convert.ToHexStringLower(SHA256.HashData(raw)) != hash) throw new InvalidDataException("Unsupported creation catalog.");
-        return Serialized(Unpack(raw));
+        if (Convert.ToHexStringLower(SHA256.HashData(raw)) != hash) throw new InvalidDataException("Unsupported client catalog.");
+        return Serialized(Unpack(raw), includeKeys: includeKeys);
     }
-    internal static byte[] Unpack(byte[] raw)
+    internal static Dictionary<string, object>[] ReadMaps(string path, string hash, params int[] mapIds)
+    {
+        SafePaths.CheckTree(Path.GetDirectoryName(path)!);
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 || new FileInfo(path).Length > 16777216)
+            throw new InvalidDataException("Invalid map bundle.");
+        var raw = File.ReadAllBytes(path);
+        if (Convert.ToHexStringLower(SHA256.HashData(raw)) != hash) throw new InvalidDataException("Unsupported map bundle.");
+        return Serialized(Unpack(raw, 67108864), maps: mapIds.ToHashSet());
+    }
+    internal static byte[] Unpack(byte[] raw, int maxOutput = 4194304)
     {
         var r = new Reader(raw);
         if (r.CString() != "UnityFS" || r.Big32() != 8) throw new InvalidDataException("Unsupported bundle.");
         r.CString(); r.CString(); var total = r.Big64(); var packed = checked((int)r.Big32()); var size = checked((int)r.Big32()); var flags = r.Big32();
         if (total != (ulong)raw.Length || flags != 0x243) throw new InvalidDataException("Unsupported bundle flags.");
         r.Align(16); var info = new Reader(Lz4(r.Take(packed), size)); info.Take(16);
-        var count = checked((int)info.Big32()); if (count is < 1 or > 128) throw new InvalidDataException("Invalid block count.");
+        var count = checked((int)info.Big32()); if (count < 1 || count > (maxOutput == 4194304 ? 128 : 4096)) throw new InvalidDataException("Invalid block count.");
         var blocks = new List<(int Size, int Packed, int Mode)>();
         for (var i = 0; i < count; i++) blocks.Add((checked((int)info.Big32()), checked((int)info.Big32()), info.Big16() & 63));
         if (info.Big32() != 1) throw new InvalidDataException("Expected one catalog node.");
         var offset = checked((int)info.Big64()); var length = checked((int)info.Big64()); info.Big32(); info.CString();
-        if (info.Position != size || blocks.Sum(b => (long)b.Size) > 4194304) throw new InvalidDataException("Invalid catalog index.");
+        if (info.Position != size || blocks.Sum(b => (long)b.Size) > maxOutput) throw new InvalidDataException("Invalid catalog index.");
         r.Align(16); using var output = new MemoryStream();
         foreach (var block in blocks)
         {
@@ -88,7 +97,7 @@ internal static class CreationDataReader
         }
         if (dst != size) throw new InvalidDataException("LZ4 size mismatch."); return output;
     }
-    private static Dictionary<string, object>[] Serialized(byte[] bytes)
+    private static Dictionary<string, object>[] Serialized(byte[] bytes, IReadOnlySet<int>? maps = null, bool includeKeys = false)
     {
         var h = new Reader(bytes); h.Big32(); h.Big32();
         if (h.Big32() != 22) throw new InvalidDataException("Unsupported serialized file.");
@@ -119,11 +128,6 @@ internal static class CreationDataReader
         var schemas = new Dictionary<(string, string, string), Node[]>(); count = r.Count();
         for (var i = 0; i < count; i++) { var t = ReadType(true); schemas.Add((r.CString(), r.CString(), r.CString()), t.Nodes); }
         r.CString(); if (r.Position != 48 + metadata) throw new InvalidDataException("Unconsumed metadata.");
-        var obj = objects.Single(o => types[o.Type].Class == 114); r = new Reader(bytes.AsSpan(obj.Offset, obj.Length).ToArray());
-        r.I32(); r.I64(); r.U8(); r.Align(); r.I32(); r.I64(); r.Text();
-        count = r.Count(); var keys = Enumerable.Range(0, count).Select(_ => r.I64()).ToArray(); count = r.Count(); var ids = Enumerable.Range(0, count).Select(_ => r.I64()).ToArray();
-        if (keys.Length != ids.Length || keys.Distinct().Count() != keys.Length) throw new InvalidDataException("Invalid dictionary.");
-        r.Align(); if (r.I32() != 2) throw new InvalidDataException("Unsupported references.");
         object Value(Node[] nodes, int index, int depth = 0)
         {
             if (depth > 32) throw new InvalidDataException("Schema nesting rejected.");
@@ -133,6 +137,7 @@ internal static class CreationDataReader
             switch (n.Type)
             {
                 case "common:840": case "string": value = r.Text(); break;
+                case "SInt8": case "common:821": value = unchecked((sbyte)r.U8()); break;
                 case "bool": case "UInt8": case "common:928": value = r.U8(); break;
                 case "int": case "SInt32": case "common:222": case "UInt32": case "common:934": value = r.I32(); break;
                 case "SInt64": case "common:814": case "UInt64": value = r.I64(); break;
@@ -147,6 +152,35 @@ internal static class CreationDataReader
             }
             if ((n.Meta & 0x4000) != 0) r.Align(); return value;
         }
+        if (maps is not null)
+        {
+            var result = new List<Dictionary<string, object>>();
+            foreach (var item in objects.Where(o => types[o.Type].Class == 114 && types[o.Type].Nodes.Any(n => n.Name == "cellsData")))
+            {
+                var nodes = types[item.Type].Nodes;
+                r = new Reader(bytes.AsSpan(item.Offset, item.Length).ToArray());
+                r.I32(); r.I64(); r.U8(); r.Align(); r.I32(); r.I64(); r.Text();
+                var payloadStart = r.Position;
+                if (!maps.Contains(r.I32())) continue;
+                r.Position = payloadStart;
+                var row = new Dictionary<string, object>();
+                for (var j = 12; j < nodes.Length; j++)
+                {
+                    if (nodes[j].Level != 1) continue;
+                    row.Add(nodes[j].Name, Value(nodes, j));
+                    if (nodes[j].Name == "rightArrowCellList") break;
+                }
+                if (!row.ContainsKey("rightArrowCellList")) throw new InvalidDataException("Incomplete map schema.");
+                result.Add(row);
+            }
+            if (result.Count != maps.Count) throw new InvalidDataException("No map geometry found.");
+            return result.ToArray();
+        }
+        var obj = objects.Single(o => types[o.Type].Class == 114); r = new Reader(bytes.AsSpan(obj.Offset, obj.Length).ToArray());
+        r.I32(); r.I64(); r.U8(); r.Align(); r.I32(); r.I64(); r.Text();
+        count = r.Count(); var keys = Enumerable.Range(0, count).Select(_ => r.I64()).ToArray(); count = r.Count(); var ids = Enumerable.Range(0, count).Select(_ => r.I64()).ToArray();
+        if (keys.Length != ids.Length || keys.Distinct().Count() != keys.Length) throw new InvalidDataException("Invalid dictionary.");
+        r.Align(); if (r.I32() != 2) throw new InvalidDataException("Unsupported references.");
         var refs = new Dictionary<long, Dictionary<string, object>>(); count = r.Count();
         for (var i = 0; i < count; i++)
         {
@@ -155,6 +189,7 @@ internal static class CreationDataReader
             refs.Add(id, row);
         }
         if (r.Position != obj.Length) throw new InvalidDataException("Unconsumed catalog data.");
+        if (includeKeys) for (var i = 0; i < ids.Length; i++) refs[ids[i]].Add("$key", keys[i]);
         return ids.Select(id => refs[id]).ToArray();
     }
 }

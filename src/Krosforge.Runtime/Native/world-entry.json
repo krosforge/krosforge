@@ -1,0 +1,20 @@
+{
+  "Build": "3.7.14.18",
+  "GeometryBundle": "Dofus_Data/StreamingAssets/Content/Map/Data/mapdata_assets_world_587.bundle",
+  "GeometryHash": "6806b94ebbfc904e0ba3f906942593819c49cf9db068ceeba1dd693d714f89ee",
+  "InformationBundle": "Dofus_Data/StreamingAssets/Content/Data/data_assets_mapsinformationdataroot.asset.bundle",
+  "InformationHash": "39860ebf8f98f915a5865f3719cd17b739691da5cf57e2a8793365d9fa83b8da",
+  "Initial": {
+    "MapId": 153878787,
+    "CellId": 362,
+    "Direction": 3,
+    "Revision": 1
+  },
+  "ExperienceBundle": "Dofus_Data/StreamingAssets/Content/Data/data_assets_characterxpmappingsdataroot.asset.bundle",
+  "ExperienceHash": "787394ed391fbe5d4950e55ff9fda5385f4cab38c9275e6bb6250a46ad5d1fce",
+  "Attributes": {
+    "Life": 100,
+    "ActionPoints": 6,
+    "MovementPoints": 3
+  }
+}

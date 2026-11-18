@@ -28,6 +28,7 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
     private readonly Func<NetworkStream, byte[], CancellationToken, Task> writeTransfer;
 
     private readonly CharacterService? characters;
+    private readonly WorldEntryService? worldEntry;
     private int nextClient;
     internal int WorldPort => ((IPEndPoint)world.LocalEndpoint).Port;
     internal int HttpPort => ((IPEndPoint)http.LocalEndpoint).Port;
@@ -35,9 +36,10 @@ internal sealed partial class LocalSessionHost : IAsyncDisposable
     internal int ConnectionPort => ((IPEndPoint)connection.LocalEndpoint).Port;
     internal string BaseUrl => $"http://127.0.0.1:{HttpPort}";
     internal LocalSessionHost(TimeSpan? authenticationTimeout = null, Action<string>? diagnostic = null, TimeProvider? clock = null,
-        Func<NetworkStream, byte[], CancellationToken, Task>? writeTransfer = null, CharacterService? characters = null)
+        Func<NetworkStream, byte[], CancellationToken, Task>? writeTransfer = null, CharacterService? characters = null, WorldEntryService? worldEntry = null)
     {
         this.characters = characters;
+        this.worldEntry = worldEntry;
         this.diagnostic = diagnostic;
         this.clock = clock ?? TimeProvider.System;
         this.writeTransfer = writeTransfer ?? ((stream, payload, token) => WorldProtocol.Write(stream, payload, token));

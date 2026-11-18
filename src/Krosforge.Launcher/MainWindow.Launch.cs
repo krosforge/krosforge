@@ -41,7 +41,7 @@ public sealed partial class MainWindow
             {
                 if (current.Stage is "failed" or "cancelled") throw new IOException(LaunchError(current.Error));
                 if (current.Stage == "exited") throw new IOException("ErrorLaunchFailed");
-                if (current.Stage is "server-selection" or "connecting-server" or "character-selection" or "returning-server") return;
+                if (current.Stage is "server-selection" or "connecting-server" or "character-selection" or "returning-server" or "entering-world" or "in-world") return;
                 if (current.Stage == "disconnected") throw new IOException("ErrorLaunchFailed");
                 cancellation.Token.ThrowIfCancellationRequested();
                 label.Text = Text.Get(current.Stage switch { "preparing" => "LaunchPreparing", "authenticating" => "LaunchAuthenticating", _ => "LaunchStarting" });

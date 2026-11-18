@@ -10,33 +10,8 @@ public sealed class ProfileStore : IDisposable
     {
         Directory.CreateDirectory(directory);
         db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory, "krosforge.db"), ForeignKeys = true, Pooling = false }.ToString());
-        db.Open();
-        Execute("PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;");
-        using var version = db.CreateCommand();
-        version.CommandText = "PRAGMA user_version";
-        var current = Convert.ToInt64(version.ExecuteScalar());
-        if (current > 1)
-        {
-            db.Dispose();
-            throw new InvalidOperationException("ErrorDatabaseVersion");
-        }
-        Execute("""
-            BEGIN IMMEDIATE;
-            CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, slot INTEGER NOT NULL UNIQUE);
-            CREATE TABLE IF NOT EXISTS counters(name TEXT PRIMARY KEY, value INTEGER NOT NULL);
-            INSERT OR IGNORE INTO counters VALUES('profile',0);
-            CREATE TABLE IF NOT EXISTS characters(id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, realm_id INTEGER NOT NULL, name TEXT NOT NULL, name_key TEXT NOT NULL, appearance TEXT NOT NULL, UNIQUE(realm_id,name_key));
-            CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS cleanup(profile_id TEXT PRIMARY KEY);
-            PRAGMA user_version=1;
-            COMMIT;
-            """);
-    }
-    private void Execute(string sql)
-    {
-        using var c = db.CreateCommand();
-        c.CommandText = sql;
-        c.ExecuteNonQuery();
+        try { db.Open(); DatabaseSchema.Initialize(db, directory); }
+        catch { db.Dispose(); throw; }
     }
     public Profile[] List()
     {
