@@ -52,7 +52,12 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                 if (!configured)
                     await CharacterNavigation.ApplyAsync(installation.Path, target, job.Cancellation.Token);
                 job.Cancellation.Token.ThrowIfCancellationRequested();
-                host ??= new LocalSessionHost(diagnostic: new SessionDiagnostics(dataRoot).Write, characters: new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target)));
+                if (host is null)
+                {
+                    var characters = new CharacterService(new CharacterStore(dataRoot), new CreationCatalog(target));
+                    host = new LocalSessionHost(diagnostic: new SessionDiagnostics(dataRoot).Write, characters: characters,
+                        worldEntry: new WorldEntryService(characters, new LocationStore(dataRoot), new WorldEntryCatalog(target)));
+                }
                 if (!configured)
                 {
                     await ClientLaunchConfiguration.WriteAsync(target, host.BaseUrl, job.Cancellation.Token);

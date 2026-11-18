@@ -45,6 +45,8 @@ public sealed class SessionTransferTests
     [Theory]
     [InlineData("connecting-server")]
     [InlineData("character-selection")]
+    [InlineData("entering-world")]
+    [InlineData("in-world")]
     [InlineData("returning-server")]
     [InlineData("disconnected")]
     public void LiveProcessRemainsActiveAcrossNetworkPhases(string phase)

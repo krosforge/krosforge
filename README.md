@@ -8,7 +8,7 @@
 
 Krosforge is an open-source desktop launcher that brings local accounts, client setup, and session controls into one portable application. Use your own client installation, keep your profiles on your computer, and manage multiple accounts from a single window.
 
-[Download](https://github.com/krosforge/krosforge/releases) · [Release notes](release-notes/0.0.2.md) · [Report an issue](https://github.com/krosforge/krosforge/issues) · [Contribute](CONTRIBUTING.md)
+[Download](https://github.com/krosforge/krosforge/releases) · [Release notes](https://github.com/krosforge/krosforge/releases/latest) · [Report an issue](https://github.com/krosforge/krosforge/issues) · [Contribute](CONTRIBUTING.md)
 
 Check the release notes for the gameplay features and compatibility covered by each version before downloading.
 
@@ -70,7 +70,7 @@ Krosforge/
 
 Use **Configure server** in the launcher to rename your local server. All profiles share this classic, multiple-account server. Close all game windows before changing its name; it appears when you next open the game. The original installation is unchanged.
 
-**To update:** use **Procurar atualizações** (Check for updates) in the launcher. It checks the latest stable GitHub release and asks before downloading and restarting. Close game sessions and wait for preparation to finish before installing. The update replaces only the launcher executable and preserves `Krosforge-data`.
+**To update:** use **Procurar atualizações** (Check for updates) in the launcher. It checks the latest stable GitHub release and asks before downloading and restarting. Close game sessions and wait for preparation to finish before installing. The update replaces the launcher executable and preserves `Krosforge-data`. New versions may migrate the local database; read the release notes for backup and downgrade instructions.
 
 For a manual update, close the launcher, back up your folder, read the release notes for data compatibility instructions, and replace `Krosforge.exe` with the executable from the new ZIP. Keep your existing `Krosforge-data` folder.
 
