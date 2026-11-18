@@ -14,6 +14,7 @@ public sealed partial class MainWindow : Window
     private readonly IRuntimeConnection runtime;
     private readonly StackPanel profiles = new() { Spacing = 10 };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Foreground = Brush.Parse("#FFB4AA"), IsVisible = false };
+    private readonly TextBlock serverName = Label("Krosforge");
     private readonly TextBlock installation = Label("", "muted");
     private readonly TextBlock installationBuild = Label("", "muted");
     private readonly TextBlock installationState = Label("", "eyebrow");
@@ -87,6 +88,10 @@ public sealed partial class MainWindow : Window
         clientPanel.Children.Add(location);
         clientPanel.Children.Add(LocalizedAction("SelectFolder", ChooseInstallation));
         clientPanel.Children.Add(new Border { Height = 1, Background = Brush.Parse("#303740"), Margin = new Thickness(0, 4) });
+        clientPanel.Children.Add(LocalizedLabel("ServerHeading", "eyebrow"));
+        clientPanel.Children.Add(serverName);
+        clientPanel.Children.Add(LocalizedLabel("ServerMode", "muted"));
+        clientPanel.Children.Add(LocalizedAction("ConfigureServer", ConfigureServer));
         clientPanel.Children.Add(LocalizedLabel("LocalHeading"));
         var localHelp = LocalizedLabel("LocalHelp", "muted");
         localHelp.FontSize = 13;
@@ -206,6 +211,7 @@ public sealed partial class MainWindow : Window
     }
     private void RenderSnapshot(Snapshot snapshot)
     {
+        serverName.Text = snapshot.Server?.Name ?? "Krosforge";
         hasInstallation = snapshot.Installation != null;
         installation.Text = snapshot.Installation is { } current ? current.Path : Text.Get("SelectInstallation");
         ToolTip.SetTip(installation, snapshot.Installation?.Path);

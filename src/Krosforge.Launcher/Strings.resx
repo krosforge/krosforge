@@ -324,4 +324,11 @@ Type “{0}” to confirm.</value>
   <data name="LaunchStarting" xml:space="preserve">
     <value>Starting the game…</value>
   </data>
+  <data name="ServerHeading" xml:space="preserve"><value>Local server</value></data>
+  <data name="ConfigureServer" xml:space="preserve"><value>Configure server</value></data>
+  <data name="ServerName" xml:space="preserve"><value>Server name</value></data>
+  <data name="ServerMode" xml:space="preserve"><value>Classic · Multiple accounts</value></data>
+  <data name="SaveServer" xml:space="preserve"><value>Save</value></data>
+  <data name="ErrorServerName" xml:space="preserve"><value>Enter a name with 1–40 characters, without control characters or angle brackets.</value></data>
+  <data name="ErrorServerPresentation" xml:space="preserve"><value>The server name could not be applied. Verify the original installation and try again.</value></data>
 </root>

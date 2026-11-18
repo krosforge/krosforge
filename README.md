@@ -68,6 +68,8 @@ Krosforge/
 
 **To back up or move the launcher:** close it, then copy the entire folder, including `Krosforge-data`.
 
+Use **Configure server** in the launcher to rename your local server. All profiles share this classic, multiple-account server. Close all game windows before changing its name; it appears when you next open the game. The original installation is unchanged.
+
 **To update:** use **Procurar atualizações** (Check for updates) in the launcher. It checks the latest stable GitHub release and asks before downloading and restarting. Close game sessions and wait for preparation to finish before installing. The update replaces only the launcher executable and preserves `Krosforge-data`.
 
 For a manual update, close the launcher, back up your folder, read the release notes for data compatibility instructions, and replace `Krosforge.exe` with the executable from the new ZIP. Keep your existing `Krosforge-data` folder.

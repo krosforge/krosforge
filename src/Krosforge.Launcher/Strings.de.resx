@@ -324,4 +324,11 @@ Gib zur Bestätigung „{0}“ ein.</value>
   <data name="LaunchStarting" xml:space="preserve">
     <value>Spiel wird gestartet…</value>
   </data>
+  <data name="ServerHeading" xml:space="preserve"><value>Lokaler Server</value></data>
+  <data name="ConfigureServer" xml:space="preserve"><value>Server konfigurieren</value></data>
+  <data name="ServerName" xml:space="preserve"><value>Servername</value></data>
+  <data name="ServerMode" xml:space="preserve"><value>Klassisch · Mehrere Konten</value></data>
+  <data name="SaveServer" xml:space="preserve"><value>Speichern</value></data>
+  <data name="ErrorServerName" xml:space="preserve"><value>Gib einen Namen mit 1–40 Zeichen ohne Steuerzeichen oder spitze Klammern ein.</value></data>
+  <data name="ErrorServerPresentation" xml:space="preserve"><value>Der Servername konnte nicht angewendet werden. Prüfe die Originalinstallation und versuche es erneut.</value></data>
 </root>
