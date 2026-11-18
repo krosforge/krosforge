@@ -324,4 +324,11 @@ Saisissez « {0} » pour confirmer.</value>
   <data name="LaunchStarting" xml:space="preserve">
     <value>Démarrage du jeu…</value>
   </data>
+  <data name="ServerHeading" xml:space="preserve"><value>Serveur local</value></data>
+  <data name="ConfigureServer" xml:space="preserve"><value>Configurer le serveur</value></data>
+  <data name="ServerName" xml:space="preserve"><value>Nom du serveur</value></data>
+  <data name="ServerMode" xml:space="preserve"><value>Classique · Multicomptes</value></data>
+  <data name="SaveServer" xml:space="preserve"><value>Enregistrer</value></data>
+  <data name="ErrorServerName" xml:space="preserve"><value>Saisissez un nom de 1 à 40 caractères, sans caractères de contrôle ni chevrons.</value></data>
+  <data name="ErrorServerPresentation" xml:space="preserve"><value>Impossible de modifier le nom du serveur. Vérifiez l’installation originale et réessayez.</value></data>
 </root>

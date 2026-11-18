@@ -25,7 +25,7 @@ internal static class ConnectionAuthentication
     internal static byte[] Accepted(Profile profile)
     {
         var collection = new ArrayBufferWriter<byte>();
-        foreach (var id in new[] { 290, 291 })
+        foreach (var id in new[] { ServerPresentation.RealmId })
         {
             var descriptor = new ArrayBufferWriter<byte>();
             ProtoWriter.UInt64(descriptor, 1, (ulong)id);

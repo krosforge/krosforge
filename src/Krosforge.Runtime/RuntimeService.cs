@@ -27,7 +27,12 @@ public sealed class RuntimeService : IDisposable
                 case "ping": return Response.Ok(true);
                 case "snapshot":
                     var installation = ClientInstallation.Discover(store.Setting("installation"));
-                    return Response.Ok(new Snapshot(store.List(), installation, HasActiveClients));
+                    return Response.Ok(new Snapshot(store.List(), installation, HasActiveClients, Server()));
+                case "configure-server":
+                    if (HasActiveClients) return Response.Fail("ErrorCloseGameFirst");
+                    var name = Krosforge.Core.ServerName.Normalize(request.Value ?? "");
+                    store.SetSetting("server.name", name);
+                    return Response.Ok(new ServerSettings(name));
                 case "installation":
                     var selected = ClientInstallation.Inspect(request.Value ?? "");
                     store.SetSetting("installation", selected.Path);
@@ -45,7 +50,7 @@ public sealed class RuntimeService : IDisposable
                 case "launch":
                     var profile = store.List().SingleOrDefault(p => p.Id == RequireId(request));
                     if (profile is null) return Response.Fail("ErrorProfileNotFound");
-                    return Response.Ok(launches.Start(profile, store.Setting("installation") ?? ClientInstallation.DefaultPath, request.Value ?? "en"));
+                    return Response.Ok(launches.Start(profile, store.Setting("installation") ?? ClientInstallation.DefaultPath, request.Value ?? "en", Server()));
                 case "launch-status": return Response.Ok(launches.Status(RequireId(request)));
                 case "cancel-launch": return Response.Ok(launches.Cancel(RequireId(request)));
                 default:
@@ -58,6 +63,7 @@ public sealed class RuntimeService : IDisposable
             return Response.Fail(error.Message);
         }
     }
+    private ServerSettings Server() => new(Krosforge.Core.ServerName.Normalize(store.Setting("server.name") ?? "Krosforge"));
     private static Guid RequireId(Request r) => r.ProfileId is { } id && id != Guid.Empty ? id : throw new ArgumentException("ErrorInvalidProfile");
     private void Cleanup()
     {

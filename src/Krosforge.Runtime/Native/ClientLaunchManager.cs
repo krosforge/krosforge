@@ -12,8 +12,9 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
     private readonly SemaphoreSlim preparation = new(1);
     private LocalSessionHost? host;
     private bool configured;
+    private string? appliedServerName;
     internal bool HasActiveClients => jobs.Values.Any(job => job.Active);
-    internal LaunchStatus Start(Profile profile, string source, string language)
+    internal LaunchStatus Start(Profile profile, string source, string language, ServerSettings? server = null)
     {
         if (!OperatingSystem.IsWindows()) throw new InvalidOperationException("ErrorWindowsRequired");
         if (profile.Slot is < 1 or > 65535) throw new InvalidOperationException("ErrorProfileIdentity");
@@ -21,7 +22,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
         if (jobs.TryGetValue(profile.Id, out var existing) && existing.Active) throw new InvalidOperationException("ErrorClientAlreadyRunning");
         var job = new LaunchJob(profile.Id);
         jobs[profile.Id] = job;
-        job.Work = Task.Run(() => Run(job, profile, source, language));
+        job.Work = Task.Run(() => Run(job, profile, source, language, server ?? new ServerSettings("Krosforge")));
         return job.Status;
     }
     internal LaunchStatus Status(Guid profileId) => jobs.TryGetValue(profileId, out var job) ? job.Status : new(profileId, "idle", 0, 0);
@@ -29,7 +30,7 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
     {
         return jobs.TryGetValue(profileId, out var job) && job.CancelPreparation();
     }
-    private async Task Run(LaunchJob job, Profile profile, string source, string language)
+    private async Task Run(LaunchJob job, Profile profile, string source, string language, ServerSettings server)
     {
         LocalSessionHost.Session? session = null;
         var terminal = "exited";
@@ -53,6 +54,11 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
                 {
                     await ClientLaunchConfiguration.WriteAsync(target, host.BaseUrl, job.Cancellation.Token);
                     configured = true;
+                }
+                if (appliedServerName != server.Name)
+                {
+                    await ServerPresentation.ApplyAsync(installation.Path, target, server.Name, job.Cancellation.Token);
+                    appliedServerName = server.Name;
                 }
                 session = host.Register(profile, language, stage => job.Update(stage));
             }
