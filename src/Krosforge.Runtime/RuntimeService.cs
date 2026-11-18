@@ -43,7 +43,7 @@ public sealed class RuntimeService : IDisposable
                     store.Rename(RequireId(request), request.Value ?? "");
                     return Response.Ok(true);
                 case "delete":
-                    if (launches.Status(RequireId(request)).Stage is "preparing" or "starting" or "authenticating" or "server-selection") return Response.Fail("ErrorCloseGameFirst");
+                    if (launches.IsActive(RequireId(request))) return Response.Fail("ErrorCloseGameFirst");
                     store.Delete(RequireId(request), request.Confirmation ?? "");
                     Cleanup();
                     return Response.Ok(true);

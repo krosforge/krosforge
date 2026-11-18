@@ -11,34 +11,44 @@ using Krosforge.Runtime.Native.Protocol.Launcher;
 using Krosforge.Runtime.Native.Protocol.Protobuf;
 namespace Krosforge.Runtime.Native;
 
-internal sealed class LocalSessionHost : IAsyncDisposable
+internal sealed partial class LocalSessionHost : IAsyncDisposable
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, Session> sessions = new();
     private readonly CancellationTokenSource lifetime = new();
     private readonly TcpListener http = new(IPAddress.Loopback, 0);
     private readonly TcpListener launcher = new(IPAddress.Loopback, 0);
     private readonly TcpListener connection = new(IPAddress.Loopback, 0);
+    private readonly TcpListener world = new(IPAddress.Loopback, 0);
     private readonly List<Task> listeners = [];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Task> clients = new();
     private readonly SemaphoreSlim slots = new(24);
     private readonly TimeSpan authenticationTimeout;
+    private readonly Action<string>? diagnostic;
+    private readonly TimeProvider clock;
+    private readonly Func<NetworkStream, byte[], CancellationToken, Task> writeTransfer;
 
     private int nextClient;
+    internal int WorldPort => ((IPEndPoint)world.LocalEndpoint).Port;
     internal int HttpPort => ((IPEndPoint)http.LocalEndpoint).Port;
     internal int LauncherPort => ((IPEndPoint)launcher.LocalEndpoint).Port;
     internal int ConnectionPort => ((IPEndPoint)connection.LocalEndpoint).Port;
     internal string BaseUrl => $"http://127.0.0.1:{HttpPort}";
-    internal LocalSessionHost(TimeSpan? authenticationTimeout = null)
+    internal LocalSessionHost(TimeSpan? authenticationTimeout = null, Action<string>? diagnostic = null, TimeProvider? clock = null,
+        Func<NetworkStream, byte[], CancellationToken, Task>? writeTransfer = null)
     {
+        this.diagnostic = diagnostic;
+        this.clock = clock ?? TimeProvider.System;
+        this.writeTransfer = writeTransfer ?? ((stream, payload, token) => WorldProtocol.Write(stream, payload, token));
         this.authenticationTimeout = authenticationTimeout ?? TimeSpan.FromSeconds(30);
         try
         {
-            http.Start(); launcher.Start(); connection.Start();
+            http.Start(); launcher.Start(); connection.Start(); world.Start();
             listeners.Add(Accept(http, ServeHttp));
             listeners.Add(Accept(launcher, ServeLauncher));
             listeners.Add(Accept(connection, ServeConnection));
+            listeners.Add(Accept(world, ServeWorld));
         }
-        catch { http.Stop(); launcher.Stop(); connection.Stop(); lifetime.Cancel(); throw; }
+        catch { http.Stop(); launcher.Stop(); connection.Stop(); world.Stop(); lifetime.Cancel(); throw; }
     }
     internal Session Register(Profile profile, string language, Action<string> phase)
     {
@@ -52,12 +62,17 @@ internal sealed class LocalSessionHost : IAsyncDisposable
         private readonly CancellationTokenSource lifetime = new();
         private string? ticket;
         private DateTimeOffset ticketExpires;
+        internal SessionTransfer Transfer { get; } = new(owner.clock);
         internal Profile Profile { get; } = profile;
         internal string Language { get; } = language;
         internal string ConnectSecret { get; } = Secret();
         internal string Key { get; } = Secret();
         internal CancellationToken Token => lifetime.Token;
-        internal void Phase(string value) { lock (gate) { if (!lifetime.IsCancellationRequested) phase(value); } }
+        internal void ReleaseNetwork(long lease, string? expectedPhase = null)
+        {
+            lock (gate) if (!lifetime.IsCancellationRequested && Transfer.Release(lease, expectedPhase)) phase("disconnected");
+        }
+        internal void Phase(string value) { lock (gate) { if (!lifetime.IsCancellationRequested) { owner.diagnostic?.Invoke("phase " + value); phase(value); } } }
         internal string IssueTicket()
         {
             lock (gate)
@@ -82,6 +97,7 @@ internal sealed class LocalSessionHost : IAsyncDisposable
             {
                 if (lifetime.IsCancellationRequested) return;
                 lifetime.Cancel();
+                Transfer.Dispose();
                 ticket = null;
                 owner.sessions.TryRemove(Profile.Slot, out _);
             }
@@ -112,7 +128,7 @@ internal sealed class LocalSessionHost : IAsyncDisposable
             // Each protocol bounds unauthenticated requests. Active sessions live until their
             // registration is revoked or the host shuts down, not a fixed connection age.
             try { await serve(client.GetStream(), lifetime.Token); }
-            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or ProtocolException or JsonException) { }
+            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or ProtocolException or JsonException) { diagnostic?.Invoke("connection-ended " + e.GetType().Name); }
             finally { slots.Release(); }
         }
     }
@@ -203,32 +219,61 @@ internal sealed class LocalSessionHost : IAsyncDisposable
     {
         var envelope = new ConnectionEnvelopeCodec(new(1, 2, 1, 2, 2), 128);
         Session? session = null;
-        while (!token.IsCancellationRequested)
+        long lease = 0;
+        bool transferred = false;
+        bool handoffIssued = false;
+        using var authentication = CancellationTokenSource.CreateLinkedTokenSource(token);
+        authentication.CancelAfter(authenticationTimeout);
+        try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token, session?.Token ?? token);
-            if (session is null) deadline.CancelAfter(authenticationTimeout);
-            var request = envelope.DecodeRequest(await ReadFrame(stream, deadline.Token));
-            byte[] payload;
-            if (request.Operation == ConnectionAuthentication.Authenticate)
+            while (!token.IsCancellationRequested)
             {
-                if (session is not null) throw new ProtocolException("Already authenticated.");
-                var supplied = ConnectionAuthentication.ReadTicket(request.Payload.Span);
-                session = sessions.Values.FirstOrDefault(candidate => candidate.ConsumeTicket(supplied)) ?? throw new ProtocolException("Ticket rejected.");
-                await Task.Delay(250, deadline.Token);
-                session.Token.ThrowIfCancellationRequested();
-                payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.Accepted(session.Profile));
+                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(session is null ? authentication.Token : token, session?.Token ?? token);
+                var request = envelope.DecodeRequest(await ReadFrame(stream, deadline.Token));
+                byte[] payload;
+                if (request.Operation == ConnectionAuthentication.Authenticate)
+                {
+                    if (session is not null) throw new ProtocolException("Already authenticated.");
+                    var supplied = ConnectionAuthentication.ReadTicket(request.Payload.Span);
+                    foreach (var candidate in sessions.Values)
+                    {
+                        lease = candidate.Transfer.Attach(supplied, returning: true);
+                        if (lease == 0 && candidate.ConsumeTicket(supplied)) lease = candidate.Transfer.Open();
+                        if (lease != 0) { session = candidate; break; }
+                    }
+                    if (session is null) throw new ProtocolException("Ticket rejected.");
+                    await Task.Delay(250, deadline.Token);
+                    session.Token.ThrowIfCancellationRequested();
+                    payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.Accepted(session.Profile));
+                }
+                else if (request.Operation == ConnectionAuthentication.SelectRealm)
+                {
+                    if (session is null || !session.Transfer.Current(lease, "connection")) throw new ProtocolException("Authentication required.");
+                    var selection = ProtoObject.Read(request.Payload.Span, 128); selection.Only(1);
+                    if (selection.UInt64(1) != ServerPresentation.RealmId)
+                        payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.RealmUnavailable());
+                    else
+                    {
+                        var ticket = session.Transfer.Handoff(lease) ?? throw new ProtocolException("Transfer rejected.");
+                        payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, WorldProtocol.Selected(ticket, WorldPort));
+                        handoffIssued = true;
+                        session.Phase("connecting-server");
+                        await writeTransfer(stream, payload, deadline.Token);
+                        transferred = true;
+                        return;
+                    }
+                }
+                else payload = envelope.ReplyToProtocolNegotiation(request);
+                await WorldProtocol.Write(stream, payload, deadline.Token);
+                if (request.Operation == ConnectionAuthentication.Authenticate) session!.Phase("server-selection");
             }
-            else if (request.Operation == ConnectionAuthentication.SelectRealm)
+        }
+        finally
+        {
+            if (session is not null && !transferred)
             {
-                if (session is null) throw new ProtocolException("Authentication required.");
-                payload = envelope.EncodeResponse(request.CorrelationId, request.Operation, ConnectionAuthentication.RealmUnavailable());
+                session.ReleaseNetwork(lease, handoffIssued ? "handoff" : "connection");
             }
-            else payload = envelope.ReplyToProtocolNegotiation(request);
-            var output = new ArrayBufferWriter<byte>();
-            ProtoWriter.Varint(output, (ulong)payload.Length);
-            output.Write(payload);
-            await stream.WriteAsync(output.WrittenMemory, deadline.Token);
-            if (request.Operation == ConnectionAuthentication.Authenticate) session!.Phase("server-selection");
         }
     }
     internal static async Task<byte[]> ReadFrame(Stream stream, CancellationToken token)
@@ -252,7 +297,7 @@ internal sealed class LocalSessionHost : IAsyncDisposable
     {
         foreach (var session in sessions.Values) session.Dispose();
         await lifetime.CancelAsync();
-        http.Stop(); launcher.Stop(); connection.Stop();
+        http.Stop(); launcher.Stop(); connection.Stop(); world.Stop();
         await Task.WhenAll(listeners);
         await Task.WhenAll(clients.Values);
         slots.Dispose(); lifetime.Dispose();

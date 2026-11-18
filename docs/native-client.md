@@ -27,7 +27,7 @@ The local adapter provides:
 
 Wire codecs were adapted from the original Krosforge protocol implementation. Technical field numbers and server identifiers belong to this compatibility adapter; game binaries, names, artwork, or extracted content are not distributed. The installation hashes in `ClientCompatibility` restrict native execution to build `3.7.14.18`.
 
-The `server-selection` launch status means that the authenticated server-list response was written to the native connection. Automated protocol tests establish this transport behavior; observing the native screen is a separate validation step. Server selection returns a protocol failure until a world session is available, rather than fabricating a world handoff.
+The `server-selection` launch status means that the authenticated server-list response was written to the native connection. Automated protocol tests establish this transport behavior; observing the native screen is a separate validation step. Selecting the local realm transfers the authenticated identity to the game endpoint.
 
 Unauthenticated launcher and connection requests have a 30-second timeout. Once authenticated, connections remain open while the user waits at server selection; closing the profile revokes them. Cancellation and the transition to starting a native process are serialized: an accepted preparation cancellation prevents that process from starting.
 
@@ -46,3 +46,13 @@ Each changed file is promoted from a temporary file. The completion record is in
 Synthetic tests cover persistence, localized dialogs, protocol identity and partial-application recovery. Native rendering and simultaneous Windows sessions require separate observation; automated binary lookup tests alone do not establish visual correctness.
 
 The connection game-type discriminator is `1` for the classic multiple-account category, including its character quota. This differs from the static catalog’s regular game-type ID `0`. The pinned client’s mono-account getter classifies connection values `0` and `2` as single-account; reusing catalog IDs on the connection wire mislabels the server.
+
+## Game connection and return
+
+Selecting the local realm hands off to a shared IPv4 loopback game endpoint. The runtime writes the endpoint and a single-use credential before closing the connection socket. The game socket authenticates that credential, acknowledges readiness, serves an empty character roster and answers keepalive messages. Character mutations are rejected and no character rows are written.
+
+A profile registration belongs to the native process; a network lease belongs to one connection generation. Returning to server selection issues a new generation and a purpose-specific ticket. Cleanup checks both the generation and the expected connection phase. A late transfer-write failure cannot release a socket that has already consumed the ticket, even when it retains the same generation. Transfer and return tickets expire after 30 seconds and are invalidated when the profile closes. An unexpected socket loss releases its lease; a fresh login can retry without affecting other registrations. A runtime restart still requires reopening native windows.
+
+The additional launch stages are `connecting-server`, `character-selection`, `returning-server`, and `disconnected`. `character-selection` records delivery of the roster, not visual confirmation of a screen. The native client may route an empty roster directly to character creation. Process activity remains independent of these network stages: updates, profile deletion and server changes remain blocked until native windows close.
+
+The game adapter bounds frames to 64 KiB and protobuf objects to 128 fields. Unauthenticated game and connection sockets have an absolute 30-second authentication deadline. Authenticated sockets have no fixed age limit. Unknown auxiliary requests produce no synthetic success and have a budget of 128 requests per game connection.
