@@ -77,6 +77,7 @@ Keep user-facing instructions in the README and version-specific capabilities an
 
 ## Pull requests
 
+- Escreva em português as mensagens de commit, o título e a descrição do PR e as notas da versão. Todo PR deve criar ou atualizar `release-notes/<versão>.md` e indicar o arquivo no [modelo de PR](.github/pull_request_template.md).
 - Describe the problem, the resulting behavior, and how you validated the change.
 - Add focused tests when changing profile persistence, process handling, or other behavior that needs automated verification.
 - Preserve the user's original client installation. Preparation and cleanup must remain limited to application-owned copies.
