@@ -18,6 +18,8 @@ public sealed class CombatDropTests
     public void ServerRatesChangeProbabilityWithAnExplicitHundredPercentCap()
     {
         Assert.Equal(59, CombatDrops.Chance(59, 1, 1));
+        // Reference UI: 59% base becomes 61.95% with its stated 5% account bonus.
+        Assert.Equal(61.95, CombatDrops.Chance(59, 1, 1.05m), 6);
         Assert.Equal(100, CombatDrops.Chance(59, 1, 2));
         Assert.Equal(29.5, CombatDrops.Chance(59, 1, 0.5m));
         Assert.Equal(0, CombatDrops.Chance(59, 1, 0));

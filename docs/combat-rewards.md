@@ -16,6 +16,8 @@ An increase in level also publishes the native level notification before the com
 
 Independent observations through the original reference-build UI provide two additional XP fixtures. In Incarnam `[-2,-3]`, a level-2 character with 5 wisdom sees 73 XP for one level-3 monster, and 262 XP for a group at levels 3, 3, 2 and 1. The implemented group and individual stages reproduce both values. These are displayed pre-combat estimates; they do not establish challenge bonuses or every possible official combat outcome.
 
+The original account also displays a 5-percent protection bonus for XP and loot in its main-menu tooltip. Its bestiary shows a 59-percent base resource chance and a 61.95-percent effective chance despite 100 prospecting. Same-build `BestiaryTabUI.GetFinalDropCoeff` at `0x181555a40` conditionally multiplies by 1.05 through the player service, separately from the prospecting formula. Local profiles have no external account-protection benefit; the neutral chance remains 59 percent before the configured local multiplier. This distinction matters when comparing the two clients and is not evidence of a different catalog probability.
+
 ## Loot eligibility and item generation
 
 The runtime reads regular drops by monster grade and global drop conditions from the pinned monster bundle. Item effects and their fixed/random parameter policy come from the pinned item and effect bundles. Numeric references are resolved before rolling; variable equipment bonuses are rolled while fixed dice effects retain their ranges. One eligible successful roll adds one item for the controlled participant, subject to the source maximum. A catalog count such as 63 is not interpreted as a 63-item stack.
