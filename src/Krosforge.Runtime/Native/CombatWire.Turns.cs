@@ -27,9 +27,12 @@ internal static partial class CombatWire
     private static byte[] Simple(int id, int value) => J(N(2, id), B(3, N(2, value)));
     private static byte[] Usable(int id, int basis, int current, int used = 0) =>
         J(N(2, id), B(1, J(N(4, basis), N(6, current - basis), N(7, used))));
-    private static IEnumerable<byte[]> Attributes(CombatStatistics stats)
+    // The native character sheet looks up all six primary attributes, including zeroes.
+    internal static IEnumerable<byte[]> Attributes(CombatStatistics stats)
     {
         yield return Usable(10, stats.Strength, stats.Strength);
+        yield return Usable(11, 0, 0);
+        yield return Usable(12, 0, 0);
         yield return Usable(13, stats.Chance, stats.Chance);
         yield return Usable(14, stats.Agility, stats.Agility);
         yield return Usable(15, stats.Intelligence, stats.Intelligence);
@@ -45,7 +48,7 @@ internal static partial class CombatWire
         var entries = new[] { Usable(0, player.MaximumLife, player.MaximumLife), Simple(95, player.MaximumLife),
             Simple(96, 0), Simple(97, player.Life - player.MaximumLife), Simple(102, 0), Simple(5, level),
             Usable(1, player.MaximumAp, player.Ap, player.MaximumAp - player.Ap),
-            Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp), Usable(3, 0, 0), Usable(11, 0, 0),
+            Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp), Usable(3, 0, 0),
             Simple(29, attributes?.Energy ?? 10000), Simple(48, attributes?.Prospecting ?? 100), Simple(109, attributes?.Hunter ?? 0) };
         return B(1, J(entries.Concat(Attributes(player.Statistics)).Select(entry => B(1, entry))
             .Concat([N(11, attributes?.Experience ?? 0), N(8, attributes?.ExperienceFloor ?? 0), N(2, nextExperience), N(6, attributes?.Currency ?? 0), B(10, [])]).ToArray()));

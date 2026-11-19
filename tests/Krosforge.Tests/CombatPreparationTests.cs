@@ -51,8 +51,26 @@ public sealed class CombatPreparationTests
         Assert.Equal(Convert.FromHexString("1a1b0a190a13747970652e616e6b616d612e636f6d2f6c6f761202180a"), events[0]);
         var e = Assert.Single(catalog.Encounters);
         Assert.Equal(153878787, e.Map); Assert.Equal(363, e.GroupCell);
-        Assert.Equal(new[] { 338,339,340,365,366,367,393,394,395,421 }, e.Board.Placements[0].Order());
-        Assert.Equal(new[] { 455,456,457,469,483,484,498,499,511,526 }, e.Board.Placements[1].Order());
+        var rotation = world.Map(e.Map).Battles;
+        long[] cycle = [153883908, 153883648, 153883910, 153883906];
+        Assert.Equal(cycle.Concat(cycle), rotation.Select(battle => battle.Id));
+        Assert.Same(e.Battle, rotation[0]);
+        Assert.All(world.Maps.Where(map => map.Id != e.Map), map => Assert.Equal(153888768, Assert.Single(map.Battles).Id));
+        Assert.DoesNotContain(world.Maps, map => cycle.Contains(map.Id));
+        Assert.Equal(new[] { 58, 62, 65, 69, 58, 62, 65, 69 },
+            rotation.Select(battle => battle.Board.Cells.Values.Count(cell => cell.Walkable)));
+        foreach (var (first, second) in rotation.Take(4).Zip(rotation.Skip(4)))
+        {
+            Assert.Equal(450, first.Subarea);
+            foreach (var team in new[] { 0, 1 })
+            {
+                Assert.Equal(8, first.Board.Placements[team].Count);
+                Assert.Equal(8, second.Board.Placements[team].Count);
+                Assert.False(first.Board.Placements[team].SetEquals(second.Board.Placements[team]));
+            }
+        }
+        Assert.Equal(new[] { 288,301,302,315,316,328,329,343 }, e.Board.Placements[0].Order());
+        Assert.Equal(new[] { 386,400,401,413,414,427,428,441 }, e.Board.Placements[1].Order());
         Assert.Equal(3270, e.Monster.Definition); Assert.Equal(1, e.Monster.Grade); Assert.Equal(1, e.Monster.Level);
         Assert.Equal(15, e.Monster.Life); Assert.Equal(2, e.Monster.ActionPoints); Assert.Equal(3, e.Monster.MovementPoints);
         Assert.Equal(3253, e.Monster.Look.BoneId);

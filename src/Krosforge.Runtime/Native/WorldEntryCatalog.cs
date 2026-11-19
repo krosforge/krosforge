@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using Krosforge.Core;
 namespace Krosforge.Runtime.Native;
@@ -14,15 +15,17 @@ internal sealed record EntryAttributes(int Life, int ActionPoints, int MovementP
 internal sealed record EntryMap(long Id, int Subarea, IReadOnlySet<int> WalkableCells)
 {
     internal MovementGrid? Movement { get; init; }
-    internal CombatBoard? Combat { get; init; }
+    internal ImmutableArray<BattleMap> Battles { get; init; } = [];
 }
+internal sealed record BattleMap(long Id, int Subarea, CombatBoard Board);
 internal sealed record MapTransition(long Source, long Destination, string Side, int ExitCell, int ArrivalCell, int Direction);
 internal sealed class WorldEntryCatalog
 {
+    private sealed record BattleMapDefinition(int Id, int[]? Blue = null, int[]? Red = null);
     private sealed record Configuration(string Build, string GeometryBundle, string GeometryHash,
         string InformationBundle, string InformationHash, string ExperienceBundle, string ExperienceHash,
         WorldLocation Initial, EntryAttributes Attributes, MovementPolicy Movement, int WorldMap, SurfaceMapDefinition[] SurfaceMaps,
-        int MaximumCharacterLevel);
+        int MaximumCharacterLevel, int DefaultBattleMap, Dictionary<int, BattleMapDefinition[]>? BattleMapOverrides);
     internal WorldLocation Initial { get; }
     internal EntryAttributes Attributes { get; }
     internal ExperienceCurve Experience { get; }
@@ -63,21 +66,39 @@ internal sealed class WorldEntryCatalog
             throw new InvalidDataException("Invalid initial attributes.");
         var information = CreationDataReader.Read(Path.Combine(root, config.InformationBundle), config.InformationHash);
         if (config.SurfaceMaps is null || config.SurfaceMaps.Length == 0) throw new InvalidDataException("Missing surface maps.");
-        var ids = config.SurfaceMaps.Select(m => checked((int)m.Id)).ToArray();
-        var geometry = CreationDataReader.ReadMaps(Path.Combine(root, config.GeometryBundle), config.GeometryHash, ids);
-        var installed = geometry.ToDictionary(row => (long)(int)row["id"], row =>
+        var surface = config.SurfaceMaps.ToDictionary(m => checked((int)m.Id));
+        var overrides = config.BattleMapOverrides ?? [];
+        if (overrides.Values.Any(rotation => rotation is null || rotation.Length == 0 || rotation.Any(definition => definition is null)))
+            throw new InvalidDataException("Missing battle map definition.");
+        var battleIds = overrides.Values.SelectMany(rotation => rotation).Select(definition => definition.Id)
+            .Append(config.DefaultBattleMap).Distinct().ToArray();
+        if (battleIds.Any(id => id <= 0 || surface.ContainsKey(id)) || overrides.Keys.Any(id => !surface.ContainsKey(id)))
+            throw new InvalidDataException("Invalid battle map association.");
+        var geometry = CreationDataReader.ReadMaps(Path.Combine(root, config.GeometryBundle), config.GeometryHash, [.. surface.Keys, .. battleIds])
+            .ToDictionary(row => (int)row["id"]);
+        var infoById = information.ToLookup(row => (int)row["id"]);
+        BattleMap ReadBattleMap(BattleMapDefinition definition)
         {
-            var id = (int)row["id"];
-            var info = information.Single(m => (int)m["id"] == id);
-            var definition = config.SurfaceMaps.Single(m => m.Id == id);
+            var id = definition.Id;
+            var board = CombatCatalog.ReadBoard(geometry[id], definition.Blue, definition.Red);
+            if (!board.Placements.ContainsKey(0) || !board.Placements.ContainsKey(1))
+                throw new InvalidDataException("Battle map must have placement cells for both teams.");
+            return new BattleMap(id, Convert.ToInt32(infoById[id].Single()["subAreaId"]), board);
+        }
+        ImmutableArray<BattleMap> defaultBattle = [ReadBattleMap(new(config.DefaultBattleMap))];
+        var battleMaps = overrides.ToDictionary(entry => entry.Key, entry => entry.Value.Select(ReadBattleMap).ToImmutableArray());
+        var installed = surface.ToDictionary(pair => (long)pair.Key, pair =>
+        {
+            var (id, definition) = pair;
+            var info = infoById[id].Single();
             if (Convert.ToInt32(info["worldMap"]) != config.WorldMap || Convert.ToInt32(info["posX"]) != definition.X || Convert.ToInt32(info["posY"]) != definition.Y)
                 throw new InvalidDataException("Surface map differs from installed world coordinates.");
-            return SurfaceMapGeometry.Read(row, info);
+            return SurfaceMapGeometry.Read(geometry[id], info);
         });
         maps = installed.Values.ToDictionary(m => m.Id, m => new EntryMap(m.Id, m.Subarea,
             m.Cells.Where(c => c.Walkable).Select(c => c.Id).ToHashSet())
         {
-            Combat = CombatCatalog.ReadBoard(geometry.Single(row => (int)row["id"] == m.Id)),
+            Battles = battleMaps.GetValueOrDefault(checked((int)m.Id), defaultBattle),
             Movement = new MovementGrid(Movement.Columns, m.Cells.Where(c => c.Walkable)
                 .Select(c => new MovementCell(c.Id, c.Altitude, c.RoleplayZone)))
         });

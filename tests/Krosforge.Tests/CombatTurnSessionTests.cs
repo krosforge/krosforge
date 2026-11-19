@@ -31,7 +31,7 @@ public sealed partial class WorldSessionTests
             await EnterMap(world, id, 100, token);
             await Send(world, "hms", WorldProtocol.Number(2, unchecked((ulong)-30001L)), token);
             foreach (var type in new[] { "kjz", "kjy", "kjp", "jxi", "jow" }) await Event(world, type, token);
-            await Send(world, "kjt", WorldProtocol.Number(1, 100), token);
+            await Send(world, "kjt", WorldProtocol.Number(1, 200), token);
             foreach (var type in new[] { "jnj", "jnv", "jww", "jwj", "jwj", "jxk" }) await Event(world, type, token);
             var book = await Event(world, "juf", token);
             await Event(world, "jxh", token);
@@ -40,7 +40,7 @@ public sealed partial class WorldSessionTests
             foreach (var type in new[] { "jxr", "jvu", "krg", "jvi" }) await Event(world, type, token);
             Assert.Equal((ulong)id, (await Event(world, "jvj", token)).UInt64(3));
             // Independent fixtures: 100 -> 86 retreats from the monster; 100 -> 114 approaches it.
-            await Send(world, "jok", Convert.FromHexString(monsterApproaches ? "0a0264561064" : "0a0264721064"), token);
+            await Send(world, "jok", Convert.FromHexString(monsterApproaches ? "0a02645610c801" : "0a02647210c801"), token);
             await Event(world, "jqh", token);
             Assert.Equal(new byte[] { 100, monsterApproaches ? (byte)86 : (byte)114 }, (await Event(world, "jnz", token)).Bytes(1));
             Assert.Equal(129UL, (await Event(world, "jsq", token)).UInt64(22));
@@ -85,10 +85,10 @@ public sealed partial class WorldSessionTests
     private static CombatBoard TurnBoard() => new(14, Enumerable.Range(0, 560)
         .Select(id => new CombatCell(id, true, true, 0, 1, id == 100 ? 0 : id == 128 ? 1 : null)));
     private static WorldEntryCatalog TurnWorld() => new(new(100, 0, 3, 1), new(14, 560, 50), [],
-        new EntryMap(100, 25, Enumerable.Range(0, 560).ToHashSet()) { Combat = TurnBoard() });
+        new EntryMap(100, 25, Enumerable.Range(0, 560).ToHashSet()) { Battles = [new(200, 26, TurnBoard())] });
     private static CombatCatalog TurnEncounter(WorldEntryCatalog world) => new(world,
         new CombatEncounter(100, -30001, 1, 3, 2, 4, 100, 128,
-            new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])) { Spells = [2] }, TurnBoard()));
+            new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])) { Spells = [2] }, world.Map(100).Battles[0]));
     private static CombatSpellCatalog TurnSpells(int monsterRange = 8)
     {
         CombatSpell spell = new(1, 1, 1, 2, 1, 8, true, true, 0, new(CombatElement.Fire, 2, 2), null);
@@ -96,7 +96,7 @@ public sealed partial class WorldSessionTests
     }
     private static void Fight(MovementFixture fixture, WorldEntryService.Selection selection)
     {
-        fixture.Service.Attack(selection, -30001); fixture.Service.Join(selection, 100); fixture.Service.Ready(selection, true);
+        fixture.Service.Attack(selection, -30001); fixture.Service.Join(selection, 200); fixture.Service.Ready(selection, true);
         Assert.NotNull(selection.Fight!.Turns);
     }
     [Fact]
@@ -105,6 +105,8 @@ public sealed partial class WorldSessionTests
         using var f = new MovementFixture(deferTimers: true, catalog: TurnWorld(), combat: TurnEncounter, spells: TurnSpells());
         var (a, notices) = f.Join("Alpha"); Fight(f, a);
         f.Service.CombatMove(a, new(100, [100, 114], 3));
+        Assert.Single(notices.OfType<FightActionRejected>());
+        f.Service.CombatMove(a, new(200, [100, 114], 3));
         var first = Assert.Single(notices.OfType<FightAction>());
         Assert.IsType<CombatWalk>(first.Action); Assert.Equal(2, first.Player.Mp);
         f.Service.Cast(a, 1, 128); Assert.Single(notices.OfType<FightAction>());

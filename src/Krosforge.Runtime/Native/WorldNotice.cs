@@ -14,6 +14,7 @@ internal sealed record ActorMoved(long Id, IReadOnlyList<int> Cells) : WorldNoti
 internal sealed record ActorCorrected(long Id, int Cell) : WorldNotice;
 internal sealed record MovementReleased : WorldNotice;
 internal sealed record MapLoading(long Map) : WorldNotice;
+internal sealed record BattleMapPreview(long Source, BattleMap Battle) : WorldNotice;
 internal sealed record EncounterAppeared(CombatEncounter Encounter) : WorldNotice;
 internal sealed record EncounterDeparted(long Group) : WorldNotice;
 internal sealed record FightEntered(long Id, CombatEncounter Encounter) : WorldNotice;

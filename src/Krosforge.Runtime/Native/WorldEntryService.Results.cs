@@ -37,9 +37,6 @@ internal sealed partial class WorldEntryService
             p.Controlled == won, p.Controlled ? selection.Character.Level : null)).ToArray();
         selection.Emit(new FightCompleted(selection.Character, selection.Attributes, fighters, fight.Receipt,
             fight.Turns?.Summary(selection.Character.Id) ?? new()) { PreviousLevel = fight.InitialLevel });
-        ReleaseFight(selection);
-        selection.MapReady = false;
-        selection.MovementAvailableAt = EarliestPredictionStart();
-        selection.Emit(new FightLeft(selection.Location.MapId));
+        ReturnFromFight(selection);
     }
 }

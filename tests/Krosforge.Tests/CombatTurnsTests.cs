@@ -35,6 +35,7 @@ public sealed class CombatTurnsTests
         Assert.Null(battle.Move(1, 1, [100, 115]));
         Assert.Null(battle.Move(1, 1, [100, 86, 72, 58, 44]));
         Assert.Equal(before, battle.Current);
+        Assert.Equal(0, battle.Summary(1).MovementPointsSpent);
     }
     [Fact]
     public void RangeSightAndSpellOwnershipAreCheckedBeforeSpendingAp()
@@ -99,20 +100,21 @@ public sealed class CombatTurnsTests
         var spell = Spell() with { PerTarget = 1 };
         var battle = new CombatTurns(Board(), [Player(100, spell), Enemy(128, 15)]);
         battle.Cast(1, 1, 1, 114, (min, _) => min);
-        Assert.Equal(new CombatSummary(), battle.Summary(1));
+        Assert.Equal(new CombatSummary { TurnsStarted = 1, ActionPointsSpent = 2 }, battle.Summary(1));
         battle.Cast(1, 1, 1, 128, (min, _) => min);
         Assert.Null(battle.Cast(1, 1, 1, 128, (min, _) => min));
         battle.Next(1, 1); battle.Next(-1, 2);
         battle.Cast(1, 3, 1, 128, (min, _) => min);
-        Assert.Equal(new CombatSummary(15, 0, 1), battle.Summary(1));
-        Assert.Equal(new CombatSummary(0, 15, 0), battle.Summary(-1));
+        var attacker = new CombatSummary(15, 0, 1) { TurnsStarted = 2, ActionPointsSpent = 6 };
+        Assert.Equal(attacker, battle.Summary(1));
+        Assert.Equal(new CombatSummary(0, 15, 0) { TurnsStarted = 1 }, battle.Summary(-1));
         Assert.Null(battle.Cast(1, 3, 1, 128, (min, _) => min));
-        Assert.Equal(new CombatSummary(15, 0, 1), battle.Summary(1));
+        Assert.Equal(attacker, battle.Summary(1));
 
         var ally = Enemy(128, 5) with { Id = 2, Team = 0 };
         var friendly = new CombatTurns(Board(), [Player(100, Spell()), ally, Enemy(170)]);
         friendly.Cast(1, 1, 1, 128, (min, _) => min);
-        Assert.Equal(new CombatSummary(5), friendly.Summary(1));
+        Assert.Equal(new CombatSummary(5) { TurnsStarted = 1, ActionPointsSpent = 2 }, friendly.Summary(1));
         Assert.Equal(new CombatSummary(0, 5), friendly.Summary(2));
     }
     [Fact]

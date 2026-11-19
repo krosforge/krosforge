@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Net.Sockets;
 using Krosforge.Runtime;
 using Krosforge.Runtime.Native;
@@ -38,10 +39,15 @@ public sealed partial class WorldSessionTests
             using var world = await Enter(host, login, token, emptyRoster: false); await EnterMap(world, id, 100, token, 250, 200);
             await Send(world, "hms", WorldProtocol.Number(2, unchecked((ulong)-30001L)), token);
             foreach (var type in new[] { "kjz", "kjy", "kjp", "jxi", "jow" }) await Event(world, type, token);
-            await Send(world, "kjt", WorldProtocol.Number(1, 100), token);
+            await Send(world, "kjt", WorldProtocol.Number(1, 200), token);
             foreach (var type in new[] { "jnj", "jnv", "jww", "jwj", "jwj", "jxk", "juf", "jxh" }) await Event(world, type, token);
             await Send(world, "jxj", [8, 1], token);
             foreach (var type in new[] { "jxr", "jvu", "krg", "jvi", "jvj" }) await Event(world, type, token);
+            await Send(world, "jok", Convert.FromHexString("0a02647210c801"), token);
+            foreach (var type in new[] { "jqh", "jnz", "jsq" }) await Event(world, type, token);
+            var movementSequence = (await Event(world, "jsy", token)).UInt64(2);
+            await Event(world, "krg", token);
+            await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, movementSequence), WorldProtocol.Number(3, 1)), token);
             await Send(world, "jsr", Convert.FromHexString("0801108001"), token);
             foreach (var type in new[] { "jqh", "jsq", "jsq", "jsq", "jsq" }) await Event(world, type, token);
             var sequence = (await Event(world, "jsy", token)).UInt64(2); await Event(world, "krg", token);
@@ -59,8 +65,22 @@ public sealed partial class WorldSessionTests
                 Assert.Equal(2UL, characterResult.UInt64(2));
                 var experience = ProtoObject.Read(ProtoObject.Read(characterResult.Repeated(1).Single().Bytes, 4096).Bytes(1), 4096);
                 Assert.Equal(125UL, experience.UInt64(3)); Assert.Equal(125UL, experience.UInt64(8)); Assert.Equal(110UL, experience.UInt64(4));
-                var summary = ProtoObject.Read((await Event(world, "jwh", token)).Bytes(2), 4096);
+                var statistics = await Event(world, "jwh", token);
+                var summary = ProtoObject.Read(statistics.Bytes(2), 4096);
                 Assert.Equal(15UL, summary.UInt64(4)); Assert.Equal(1UL, summary.UInt64(7));
+                var participant = ProtoObject.Read(Assert.Single(statistics.Repeated(1)).Bytes, 4096);
+                Assert.Equal((ulong)id, participant.UInt64(1));
+                var details = ProtoObject.Read(participant.Bytes(2), 4096);
+                foreach (var category in new[] { 1, 2, 3, 5, 6, 7, 9, 11, 12 }) Assert.True(details.Has(category));
+                var identity = ProtoObject.Read(details.Bytes(8), 4096);
+                Assert.Equal((ulong)id, identity.UInt64(1)); Assert.True(identity.Has(5)); Assert.Equal(0UL, identity.UInt64(7));
+                var damage = ProtoObject.Read(details.Bytes(1), 4096);
+                Assert.Equal(15UL, damage.UInt64(10)); Assert.Equal(15UL, damage.UInt64(2));
+                Assert.Equal(7.5f, ReadAverage(damage, 1));
+                Assert.Equal(15f, ReadAverage(damage, 6));
+                Assert.Equal(2f, ReadAverage(ProtoObject.Read(details.Bytes(9), 4096), 2));
+                Assert.Equal(1f, ReadAverage(ProtoObject.Read(details.Bytes(5), 4096), 2));
+                Assert.Equal(1UL, ProtoObject.Read(details.Bytes(11), 4096).UInt64(3));
                 AssertCombatInventory(await Event(world, "irl", token));
                 Assert.Equal(1UL, (await Event(world, "ith", token)).UInt64(2));
                 Assert.Equal(1UL, ProtoObject.Read((await Event(world, "krg", token)).Bytes(1), 4096).UInt64(6));
@@ -87,6 +107,12 @@ public sealed partial class WorldSessionTests
             Assert.Equal((ulong)persistedItem.Id, itemId); Assert.Equal(1, persistedItem.Quantity);
         }
         finally { Directory.Delete(root, true); }
+    }
+    private static float ReadAverage(ProtoObject body, int tag)
+    {
+        var field = Assert.Single(body.Repeated(tag));
+        Assert.Equal(5, field.WireType);
+        return BinaryPrimitives.ReadSingleLittleEndian(field.Bytes);
     }
     private static ulong AssertCombatInventory(ProtoObject inventory)
     {

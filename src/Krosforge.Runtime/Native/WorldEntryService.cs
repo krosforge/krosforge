@@ -39,6 +39,7 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
         internal CharacterRewards Rewards { get; set; } = new(0, []);
         internal long Currency { get; set; }
         internal EntryMap Map => owner.catalog.Map(Location.MapId);
+        internal Dictionary<long, int> BattleIndices { get; } = [];
         internal bool ContextCreated { get; set; }
         internal bool MapReady { get; set; }
         internal Action<WorldNotice> Emit { get; } = emit;

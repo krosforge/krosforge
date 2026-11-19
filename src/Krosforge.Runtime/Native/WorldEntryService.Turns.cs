@@ -118,7 +118,7 @@ internal sealed partial class WorldEntryService
         lock (gate)
         {
             var fight = AvailableTurn(selection);
-            if (fight is null || request.Map != selection.Location.MapId ||
+            if (fight is null || request.Map != fight.Encounter.Battle.Id ||
                 fight.Turns!.Move(selection.Character.Id, fight.Turns.Serial, request.TurningCells) is not { } action)
             { selection.Emit(new FightActionRejected()); return; }
             PublishAction(selection, fight, action);

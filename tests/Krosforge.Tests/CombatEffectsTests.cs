@@ -84,9 +84,11 @@ public sealed class CombatEffectsTests
         var rolls = 0;
         Assert.Throws<InvalidOperationException>(() => battle.Cast(1, 1, 1, 100, (minimum, maximum) => ++rolls == 1 ? minimum : maximum + 1));
         Assert.All(battle.Fighters, fighter => Assert.Equal(100, fighter.Life));
-        Assert.Equal(6, battle.Current.Ap); Assert.Equal(new CombatSummary(), battle.Summary(1));
+        Assert.Equal(6, battle.Current.Ap);
+        Assert.Equal(new CombatSummary { TurnsStarted = 1 }, battle.Summary(1));
         var retried = battle.Cast(1, 1, 1, 100, (minimum, _) => minimum)!;
         Assert.Equal(2, retried.Resolved.Length); Assert.Equal(20, battle.Summary(1).DamageDealt); Assert.Equal(4, battle.Current.Ap);
+        Assert.Equal(2, battle.Summary(1).ActionPointsSpent);
     }
     [Fact]
     public void NativeActionsProjectAllAreaHitsAndHealingWithTheObservedUnionFields()

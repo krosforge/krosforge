@@ -14,6 +14,8 @@ Field numbers and native types were independently read from the installed metada
 | `kjx` forfeit request | empty |
 | `kjy`, `kjp` context reset | empty destruction, then field 1 context (1 combat, 0 exploration) |
 | `jxi` fight join | 1: fight identity; 6: fight type enum |
+| `jxa` combat map preview request | empty |
+| `jvk` combat map preview | 1: exploration map; 2: `lfp`; 4: battle map |
 | `jnj` map information | 10: map; 12: subarea; 11: combat variant `ldg` |
 | `jww` preparation | 2: observed true flag; 4: placement input enabled; 5: fight type |
 | `jwj` fighter shown | 1: actor `lcs` |
@@ -30,9 +32,9 @@ The exploration group uses `lbx.5 -> lbs.6 -> lgk`: leader `kzi` at field 4, add
 
 The `ldg` map variant has integer fields 1, 2 and 3. The current projection retains values 1 in fields 1 and 3 from the earlier interoperability behavior; their gameplay meanings remain unknown. Likewise preparation field 2 is an observed compatibility flag, not an inferred capability. These literals are confined to the native adapter.
 
-Independent native data checks use the monster bundle hash `02a44dcd50e87333adf5218c5545901c819e1de52798139f67d8d6599dd8db00` and the geometry hash in the surface contract. Monster 3270, grade 1, has level 1, life 15, AP 2, MP 3 and look bone 3253. The initial map's blue placements are `338,339,340,365,366,367,393,394,395,421`; red placements are `455,456,457,469,483,484,498,499,511,526`. Tests assert these independently read values against runtime loading. Spawn cell 363, initial placements and encounter membership are reconstructed local policy.
+Independent native data checks use the monster bundle hash `02a44dcd50e87333adf5218c5545901c819e1de52798139f67d8d6599dd8db00` and the geometry hash in the surface contract. Monster 3270, grade 1, has level 1, life 15, AP 2, MP 3 and look bone 3253. The observed sequence at `[0,-3]` uses arenas `153883908`, `153883648`, `153883910` and `153883906` (subarea `450`). These have 58, 62, 65 and 69 walkable cells, respectively. The local rotation uses two of the observed placement configurations per arena, each with eight cells per team. The runtime reads the installed geometry and applies the configured placement cells. The rotation schedule, default arena `153888768`, spawn cell 363, initial fighter positions and encounter membership are local rules.
 
-TCP coverage checks negative identities as signed int64 two's-complement varints, concrete participant variants, the two distinct placement sets, context ordering and restoration of the original location after forfeit. It establishes server/wire behavior, not native rendering or complete combat rules.
+TCP coverage checks signed negative identities, concrete participant variants, distinct exploration and arena identities, identical preview and preparation zones, context ordering, and restoration of the exploration location after forfeit.
 
 ## Neutral calendar presentation
 

@@ -9,14 +9,14 @@ public sealed partial class WorldSessionTests
     private static WorldEntryCatalog GroupWorld() => new(new(100, 0, 3, 1), new(14, 560, 50), [],
         new EntryMap(100, 25, Enumerable.Range(0, 560).ToHashSet())
         {
-            Combat = new(14, Enumerable.Range(0, 560).Select(id =>
-                new CombatCell(id, true, true, 0, 1, id == 100 ? 0 : id is 128 or 129 ? 1 : null)))
+            Battles = [new(200, 26, new(14, Enumerable.Range(0, 560).Select(id =>
+                new CombatCell(id, true, true, 0, 1, id == 100 ? 0 : id is 128 or 129 ? 1 : null))))]
         });
     private static CombatCatalog GroupEncounter(WorldEntryCatalog world)
     {
-        var board = world.Map(100).Combat!;
+        var battle = world.Map(100).Battles[0];
         return new(world, new CombatEncounter(100, -30001, 1, 3, 2, 4, 100, 128,
-            new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])) { Experience = 50, Spells = [2] }, board)
+            new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])) { Experience = 50, Spells = [2] }, battle)
         {
             Reward = new(1, true),
             Companions = [new(-2, 129, new(8, 2, 1, 25, 4, 2, new(10, [], [], [110])) { Experience = 80, Spells = [2] })]
@@ -67,7 +67,7 @@ public sealed partial class WorldSessionTests
         Assert.Equal(8UL, companion.UInt64(5)); Assert.Equal(2UL, companion.UInt64(2));
         Assert.Equal(10UL, Read(companion.Bytes(3)).UInt64(1));
         CharacterWire character = new(1, "Hero", 1, 0, 1, 1, 1, new(1, [], [], [100]));
-        CombatView view = new(1, world.Map(100), encounter, character, world.Attributes,
+        CombatView view = new(1, encounter, character, world.Attributes,
             [new(1, 0, 100, true), new(-1, 1, 128, false, true), new(-2, 1, 129, false, true)]);
         var fighter = Read(CombatWire.Fighter(view, view.Positions[2]));
         Assert.Equal(unchecked((ulong)-2L), fighter.UInt64(1)); Assert.Equal(129UL, Read(fighter.Bytes(2)).UInt64(3));

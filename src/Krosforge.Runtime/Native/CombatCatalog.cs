@@ -14,12 +14,26 @@ internal sealed record CombatMonster(int Definition, int Grade, int Level, int L
 internal sealed record CombatReward(long Currency, bool RestoreFullLife);
 internal sealed record CombatOpponent(long Actor, int Cell, CombatMonster Monster);
 internal sealed record CombatEncounter(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
-    int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, CombatBoard Board)
+    int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, BattleMap Battle)
 {
+    internal CombatBoard Board => Battle.Board;
     internal CombatReward Reward { get; init; } = new(0, true);
     internal ImmutableArray<CombatOpponent> Companions { get; init; } = [];
     internal IEnumerable<CombatOpponent> Opponents => new[] { new CombatOpponent(-1, MonsterCell, Monster) }.Concat(Companions);
     internal CombatMonster MonsterFor(long actor) => Opponents.Single(opponent => opponent.Actor == actor).Monster;
+    internal CombatEncounter OnBattle(BattleMap battle)
+    {
+        if (battle == Battle) return this;
+        var red = battle.Board.Placements[1].Order().ToArray();
+        if (red.Length <= Companions.Length) throw new InvalidDataException("Not enough battle placement cells for the group.");
+        return this with
+        {
+            Battle = battle,
+            PlayerCell = battle.Board.Placements[0].Min(),
+            MonsterCell = red[0],
+            Companions = Companions.Select((other, index) => other with { Cell = red[index + 1] }).ToImmutableArray()
+        };
+    }
 }
 
 internal sealed class CombatCatalog
@@ -66,10 +80,10 @@ internal sealed class CombatCatalog
         Encounters = config.Encounters.Select(definition =>
         {
             var map = world.Map(definition.Map);
-            var board = map.Combat ?? throw new InvalidDataException("Combat geometry missing.");
+            var battle = map.Battles.FirstOrDefault() ?? throw new InvalidDataException("Combat geometry missing.");
             return new CombatEncounter(map.Id, definition.GroupId, definition.GroupCell, definition.Direction, definition.AttackDistance,
                 definition.FightType, definition.PlayerCell, definition.MonsterCell,
-                ReadMonster(definition.MonsterId, definition.Grade), board)
+                ReadMonster(definition.MonsterId, definition.Grade), battle)
             {
                 Reward = definition.Reward,
                 Companions = (definition.Companions ?? []).Select((companion, index) =>
@@ -84,15 +98,21 @@ internal sealed class CombatCatalog
         if (Encounters.Select(e => e.GroupId).Distinct().Count() != Encounters.Count) throw new InvalidDataException("Duplicate encounter identity.");
         foreach (var e in Encounters)
         {
+            var map = world.Map(e.Map);
             if (e.GroupId >= -1 || e.Direction is < 0 or > 7 || e.AttackDistance is < 1 or > 560 || e.FightType is < 0 or > 10 ||
-                !world.Map(e.Map).WalkableCells.Contains(e.GroupCell) || e.Companions.IsDefault || e.Companions.Length > 7 ||
+                !map.WalkableCells.Contains(e.GroupCell) || e.Battle != map.Battles.FirstOrDefault() ||
+                e.Companions.IsDefault || e.Companions.Length > 7 ||
                 e.Opponents.Select(m => m.Actor).Distinct().Count() != e.Companions.Length + 1 ||
                 e.Opponents.Any(m => m.Actor >= 0 || m.Monster.Definition <= 0 || m.Monster.Grade <= 0 ||
                     m.Monster.Level <= 0 || m.Monster.Life <= 0 || m.Monster.ActionPoints <= 0 || m.Monster.MovementPoints < 0) ||
                 e.Reward is null || e.Reward.Currency < 0 || !e.Reward.RestoreFullLife)
                 throw new InvalidDataException("Invalid encounter configuration.");
-            _ = new CombatPreparation(e.Board, new[] { new CombatPlacement(1, 0, e.PlayerCell, true) }
-                .Concat(e.Opponents.Select(m => new CombatPlacement(m.Actor, 1, m.Cell, false, true))));
+            foreach (var battle in map.Battles)
+            {
+                var placed = e.OnBattle(battle);
+                _ = new CombatPreparation(placed.Board, new[] { new CombatPlacement(1, 0, placed.PlayerCell, true) }
+                    .Concat(placed.Opponents.Select(m => new CombatPlacement(m.Actor, 1, m.Cell, false, true))));
+            }
         }
     }
     private static int Number(Dictionary<string, object> row, string key) => Convert.ToInt32(row[key], CultureInfo.InvariantCulture);
@@ -129,14 +149,24 @@ internal sealed class CombatCatalog
         if (bone <= 0 || fields.Length > 2 && fields[2].Length != 0) throw new InvalidDataException("Unsupported monster appearance.");
         return new(bone, Parts(1), [], fields.Length > 3 && fields[3].Length > 0 ? Parts(3) : [100]);
     }
-    internal static CombatBoard ReadBoard(Dictionary<string, object> geometry)
+    internal static CombatBoard ReadBoard(Dictionary<string, object> geometry, int[]? bluePlacement = null, int[]? redPlacement = null)
     {
+        var blueCells = bluePlacement?.ToHashSet();
+        var redCells = redPlacement?.ToHashSet();
+        if ((blueCells is null) != (redCells is null) ||
+            blueCells is not null && redCells is not null &&
+            (blueCells.Count != bluePlacement!.Length || redCells.Count != redPlacement!.Length ||
+                blueCells.Overlaps(redCells) || blueCells.Concat(redCells).Any(id => id is < 0 or >= 560)))
+            throw new InvalidDataException("Invalid configured placement flags.");
         var cells = Rows(geometry, "cellsData").Select(c =>
         {
             var red = Number(c, "red"); var blue = Number(c, "blue");
             if (red is < 0 or > 1 || blue is < 0 or > 1 || red + blue > 1) throw new InvalidDataException("Invalid native placement flags.");
-            return new CombatCell(Number(c, "cellNumber"), Number(c, "mov") == 1 && Number(c, "visible") == 1 && Number(c, "altitude") != -128,
-                Number(c, "los") == 1, Number(c, "altitude"), Number(c, "linkedZone") & 15, red == 1 ? 1 : blue == 1 ? 0 : null);
+            var id = Number(c, "cellNumber");
+            var player = blueCells?.Contains(id) ?? blue == 1;
+            var opponent = redCells?.Contains(id) ?? red == 1;
+            return new CombatCell(id, Number(c, "mov") == 1 && Number(c, "visible") == 1 && Number(c, "altitude") != -128,
+                Number(c, "los") == 1, Number(c, "altitude"), Number(c, "linkedZone") & 15, opponent ? 1 : player ? 0 : null);
         }).ToArray();
         if (cells.Length != 560 || !cells.Select(c => c.Id).Order().SequenceEqual(Enumerable.Range(0, 560))) throw new InvalidDataException("Invalid combat cells.");
         return new(14, cells);
