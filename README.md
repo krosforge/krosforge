@@ -68,7 +68,7 @@ Krosforge/
 
 **To back up or move the launcher:** close it, then copy the entire folder, including `Krosforge-data`.
 
-Use **Configure server** in the launcher to rename your local server. All profiles share this classic, multiple-account server. Close all game windows before changing its name; it appears when you next open the game. The original installation is unchanged.
+Use **Configure server** in the launcher to rename your local server and choose separate experience and drop multipliers. Both rates default to 1×; zero disables that reward. The drop multiplier changes the chance of receiving an item, capped at 100%, rather than the number of items in a successful drop. All profiles share this classic, multiple-account server. Close all game windows before changing these settings; they apply when you next open the game. The original installation is unchanged.
 
 **To update:** use **Procurar atualizações** (Check for updates) in the launcher. It checks the latest stable GitHub release and asks before downloading and restarting. Close game sessions and wait for preparation to finish before installing. The update replaces the launcher executable and preserves `Krosforge-data`. New versions may migrate the local database; read the release notes for backup and downgrade instructions.
 
