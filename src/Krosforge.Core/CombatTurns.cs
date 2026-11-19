@@ -39,7 +39,12 @@ public sealed record CombatCast(long Actor, CombatSpell Spell, int Cell, long? T
     public ImmutableArray<CombatEffectResult> Resolved { get; init; } = [];
 }
 public sealed record CombatSummary(long DamageDealt = 0, long DamageTaken = 0, int EnemiesDefeated = 0,
-    long HealingDone = 0, long HealingReceived = 0);
+    long HealingDone = 0, long HealingReceived = 0)
+{
+    public long ActionPointsSpent { get; init; }
+    public long MovementPointsSpent { get; init; }
+    public int TurnsStarted { get; init; }
+}
 
 // The owner serializes commands and animation acknowledgements. No wall clock, network or storage lives here.
 public sealed partial class CombatTurns
@@ -77,6 +82,7 @@ public sealed partial class CombatTurns
         grid = new(board.Columns, board.Cells.Values.Where(c => c.Walkable).Select(c => new MovementCell(c.Id, c.Altitude, c.Zone)));
         // Stable local tie break: controlled actors first, then identity. Initiative remains authoritative.
         order = fighters.Values.OrderByDescending(f => f.Statistics.Initiative).ThenByDescending(f => f.Controlled).ThenBy(f => f.Id).Select(f => f.Id).ToArray();
+        StartTurn();
     }
     private static void Validate(CombatSpell spell)
     {
@@ -105,7 +111,10 @@ public sealed partial class CombatTurns
         if (path is null || path.Cells.Count - 1 > fighter.Mp ||
             path.Cells.Zip(path.Cells.Skip(1)).Any(pair => grid.Distance(pair.First, pair.Second) != 1) ||
             path.Cells.Skip(1).Any(cell => fighters.Values.Any(f => f.Alive && f.Id != actor && f.Cell == cell))) return null;
-        fighters[actor] = fighter with { Cell = path.Cells[^1], Mp = fighter.Mp - path.Cells.Count + 1 };
+        var spent = path.Cells.Count - 1;
+        var summary = Summary(actor);
+        summaries[actor] = summary with { MovementPointsSpent = checked(summary.MovementPointsSpent + spent) };
+        fighters[actor] = fighter with { Cell = path.Cells[^1], Mp = fighter.Mp - spent };
         return new(actor, path.Cells.ToArray());
     }
     public bool CanCast(long actor, long serial, int spellId, int cell)
@@ -136,6 +145,8 @@ public sealed partial class CombatTurns
         {
             fighters[actor] = fighter with { Ap = fighter.Ap - spell.Cost };
             resolved = Resolve(fighter, spell, cell, critical, roll);
+            var summary = Summary(actor);
+            summaries[actor] = summary with { ActionPointsSpent = checked(summary.ActionPointsSpent + spell.Cost) };
         }
         catch
         {
@@ -160,8 +171,15 @@ public sealed partial class CombatTurns
         if (!Owns(actor, serial)) return false;
         do { current = (current + 1) % order.Length; if (current == 0) Round++; } while (!Current.Alive);
         Serial++; uses.Clear();
-        fighters[Current.Id] = Current with { Ap = Current.MaximumAp, Mp = Current.MaximumMp };
+        StartTurn();
         return true;
+    }
+    private void StartTurn()
+    {
+        var fighter = Current;
+        var summary = Summary(fighter.Id);
+        summaries[fighter.Id] = summary with { TurnsStarted = checked(summary.TurnsStarted + 1) };
+        fighters[fighter.Id] = fighter with { Ap = fighter.MaximumAp, Mp = fighter.MaximumMp };
     }
     public IReadOnlyList<int>? Approach(long actor, long serial, int target)
     {
