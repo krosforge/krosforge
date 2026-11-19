@@ -12,8 +12,8 @@
       "Direction": 3,
       "AttackDistance": 2,
       "FightType": 4,
-      "PlayerCell": 256,
-      "MonsterCell": 318,
+      "PlayerCell": 300,
+      "MonsterCell": 275,
       "MonsterId": 3270,
       "Grade": 1,
       "Reward": { "Currency": 1, "RestoreFullLife": true }

@@ -131,14 +131,24 @@ internal sealed class CombatCatalog
         if (bone <= 0 || fields.Length > 2 && fields[2].Length != 0) throw new InvalidDataException("Unsupported monster appearance.");
         return new(bone, Parts(1), [], fields.Length > 3 && fields[3].Length > 0 ? Parts(3) : [100]);
     }
-    internal static CombatBoard ReadBoard(Dictionary<string, object> geometry)
+    internal static CombatBoard ReadBoard(Dictionary<string, object> geometry, int[]? bluePlacement = null, int[]? redPlacement = null)
     {
+        var blueCells = bluePlacement?.ToHashSet();
+        var redCells = redPlacement?.ToHashSet();
+        if ((blueCells is null) != (redCells is null) ||
+            blueCells is not null && redCells is not null &&
+            (blueCells.Count != bluePlacement!.Length || redCells.Count != redPlacement!.Length ||
+                blueCells.Overlaps(redCells) || blueCells.Concat(redCells).Any(id => id is < 0 or >= 560)))
+            throw new InvalidDataException("Invalid configured placement flags.");
         var cells = Rows(geometry, "cellsData").Select(c =>
         {
             var red = Number(c, "red"); var blue = Number(c, "blue");
             if (red is < 0 or > 1 || blue is < 0 or > 1 || red + blue > 1) throw new InvalidDataException("Invalid native placement flags.");
-            return new CombatCell(Number(c, "cellNumber"), Number(c, "mov") == 1 && Number(c, "visible") == 1 && Number(c, "altitude") != -128,
-                Number(c, "los") == 1, Number(c, "altitude"), Number(c, "linkedZone") & 15, red == 1 ? 1 : blue == 1 ? 0 : null);
+            var id = Number(c, "cellNumber");
+            var player = blueCells?.Contains(id) ?? blue == 1;
+            var opponent = redCells?.Contains(id) ?? red == 1;
+            return new CombatCell(id, Number(c, "mov") == 1 && Number(c, "visible") == 1 && Number(c, "altitude") != -128,
+                Number(c, "los") == 1, Number(c, "altitude"), Number(c, "linkedZone") & 15, opponent ? 1 : player ? 0 : null);
         }).ToArray();
         if (cells.Length != 560 || !cells.Select(c => c.Id).Order().SequenceEqual(Enumerable.Range(0, 560))) throw new InvalidDataException("Invalid combat cells.");
         return new(14, cells);
