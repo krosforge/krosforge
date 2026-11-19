@@ -38,7 +38,7 @@ public sealed partial class WorldSessionTests
             using var world = await Enter(host, login, token, emptyRoster: false); await EnterMap(world, id, 100, token, 250, 200);
             await Send(world, "hms", WorldProtocol.Number(2, unchecked((ulong)-30001L)), token);
             foreach (var type in new[] { "kjz", "kjy", "kjp", "jxi", "jow" }) await Event(world, type, token);
-            await Send(world, "kjt", WorldProtocol.Number(1, 100), token);
+            await Send(world, "kjt", WorldProtocol.Number(1, 200), token);
             foreach (var type in new[] { "jnj", "jnv", "jww", "jwj", "jwj", "jxk", "juf", "jxh" }) await Event(world, type, token);
             await Send(world, "jxj", [8, 1], token);
             foreach (var type in new[] { "jxr", "jvu", "krg", "jvi", "jvj" }) await Event(world, type, token);

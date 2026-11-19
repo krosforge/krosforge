@@ -8,6 +8,8 @@ An encounter can define up to eight opponents, each with a distinct negative fig
 
 Combat terrain comes from the installed map geometry. The low nibble of `linkedZone` identifies the combat zone; exploration continues to use the high nibble. Native red and blue cell flags define the two placement sets. Initial positions must belong to their respective teams and cannot overlap. The catalog rejects unknown creature grades, unsupported appearance formats and invalid placement instead of silently substituting content.
 
+`Native/world-entry.json` assigns every supported exploration map a separate arena through `DefaultBattleMap`. An optional `BattleMapOverrides` entry maps an exploration map ID to an arena ID in the installed geometry bundle. Each configured arena must have both teams' placement cells. Incarnam currently shares one installed arena as a local rule. The native **Combat Map** command and its shortcut use the same arena and placement cells as fight preparation, including on maps without an available encounter.
+
 ## Encounter and preparation lifecycle
 
 An authenticated selected character can attack a visible group on its current map. If necessary, it approaches along a validated exploration path. Admission waits for the movement and any carried partial-segment time to finish. A new movement, cancellation, map change or disconnect cancels the pending attack. An attack requested during another walk resumes its approach after that walk ends.

@@ -142,6 +142,10 @@ internal sealed partial class LocalSessionHost
                         case "joc" when selected is { MapReady: true }:
                             worldEntry!.ChangeMap(selected, WorldMovementWire.ChangeMap(request.Payload));
                             continue;
+                        case "jxa" when selected is not null:
+                            body.Only();
+                            worldEntry!.PreviewBattleMap(selected);
+                            continue;
                         case "jsr" when selected is not null:
                             var cast = CombatWire.CastRequest(request.Payload);
                             worldEntry!.Cast(selected, cast.Spell, cast.Cell); continue;

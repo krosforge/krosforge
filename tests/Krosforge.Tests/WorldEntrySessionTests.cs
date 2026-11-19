@@ -59,6 +59,11 @@ public sealed partial class WorldSessionTests
             Assert.Equal(100UL, ProtoObject.Read(entries[95].Bytes(3), 128).UInt64(2));
             Assert.Equal(6UL, ProtoObject.Read(entries[1].Bytes(1), 128).UInt64(4));
             Assert.Equal(3UL, ProtoObject.Read(entries[23].Bytes(1), 128).UInt64(4));
+            // The client's characteristic graph requires all six primary records, even at zero.
+            foreach (var attribute in new ulong[] { 10, 11, 12, 13, 14, 15 })
+                Assert.Equal(0UL, ProtoObject.Read(entries[attribute].Bytes(1), 128).UInt64(4));
+            foreach (var multiplier in new ulong[] { 120, 121, 122, 123, 124, 125, 141, 142 })
+                Assert.Equal(100UL, ProtoObject.Read(entries[multiplier].Bytes(1), 128).UInt64(4));
             // Native BestiaryTabUI dereferences both entries while binding the row,
             // before it can finish the monster category and loot presentation.
             Assert.Equal(10000UL, ProtoObject.Read(entries[29].Bytes(3), 128).UInt64(2));

@@ -1,4 +1,5 @@
 using System.Text;
+using Krosforge.Core;
 using Krosforge.Runtime.Native.Protocol;
 using Krosforge.Runtime.Native.Protocol.Protobuf;
 namespace Krosforge.Runtime.Native;
@@ -22,7 +23,7 @@ internal static class WorldEntryWire
     }
     internal static byte[] Context() => N(1, 0);
     internal static byte[] LoadMap(long map) => N(1, map);
-    internal static byte[] Reference(EntryMap map) => J(N(3, map.Id), N(5, map.Subarea));
+    internal static byte[] Reference(long map, int subarea) => J(N(3, map), N(5, subarea));
     internal static byte[] EmptyInventory(long currency = 0) => J(B(3, []), N(4, currency));
     internal static byte[] Statistics(WorldEntryService.Selection selection) => Statistics(selection.Attributes, selection.Character.Level);
     internal static byte[] Statistics(EntryAttributes attributes, int level)
@@ -32,7 +33,8 @@ internal static class WorldEntryWire
         // StatId names recovered from the current metadata: HitPoints, MaxLifePoints,
         // Shield, HitPointLoss, CurPermanentDamage, Level, ActionPoints, MovementPoints.
         var stats = J(Usable(0, attributes.Life), Simple(95, attributes.Life), Simple(96, 0), Simple(97, 0),
-            Simple(5, level), Usable(3, 0), Usable(11, 0), Simple(102, 0),
+            Simple(5, level), Usable(3, 0), Simple(102, 0),
+            J(CombatWire.Attributes(CombatStatistics.Empty).Select(entry => B(1, entry)).ToArray()),
             Usable(1, attributes.ActionPoints), Usable(23, attributes.MovementPoints),
             Simple(29, attributes.Energy), Simple(48, attributes.Prospecting), Simple(109, attributes.Hunter),
             N(11, attributes.Experience), N(8, attributes.ExperienceFloor), N(2, attributes.NextLevelExperience), N(6, attributes.Currency), B(10, []));
@@ -56,7 +58,7 @@ internal static class WorldEntryWire
     }
     internal static byte[][] Events(WorldNotice notice) => notice switch
     {
-        MapSnapshot snapshot => [.. snapshot.NeutralCalendar is { } calendar ? new[] { WorldProtocol.Event("lov", N(3, calendar)) } : Array.Empty<byte[]>(), WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors, snapshot.Encounters)), WorldProtocol.Event("jnv", Reference(snapshot.Map)),
+        MapSnapshot snapshot => [.. snapshot.NeutralCalendar is { } calendar ? new[] { WorldProtocol.Event("lov", N(3, calendar)) } : Array.Empty<byte[]>(), WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors, snapshot.Encounters)), WorldProtocol.Event("jnv", Reference(snapshot.Map.Id, snapshot.Map.Subarea)),
             .. snapshot.Rates is { } rates ? new[] { WorldProtocol.Event("hme", J(N(3, rates.ExperiencePercent), N(4, rates.DropPercent), N(5, 100))) } : Array.Empty<byte[]>()],
         ActorAppeared appeared => [WorldProtocol.Event("jns", B(1, Actor(appeared.Actor)))],
         ActorDeparted departed => [WorldProtocol.Event("kjz", N(1, departed.Id))],

@@ -51,8 +51,11 @@ public sealed class CombatPreparationTests
         Assert.Equal(Convert.FromHexString("1a1b0a190a13747970652e616e6b616d612e636f6d2f6c6f761202180a"), events[0]);
         var e = Assert.Single(catalog.Encounters);
         Assert.Equal(153878787, e.Map); Assert.Equal(363, e.GroupCell);
-        Assert.Equal(new[] { 338,339,340,365,366,367,393,394,395,421 }, e.Board.Placements[0].Order());
-        Assert.Equal(new[] { 455,456,457,469,483,484,498,499,511,526 }, e.Board.Placements[1].Order());
+        Assert.Equal(153888768, e.Battle.Id); Assert.Equal(1036, e.Battle.Subarea);
+        Assert.All(world.Maps, map => Assert.Same(e.Battle, map.Battle));
+        Assert.DoesNotContain(world.Maps, map => map.Id == e.Battle.Id);
+        Assert.Equal(new[] { 187,201,202,214,228,230,241,256,257,286,288 }, e.Board.Placements[0].Order());
+        Assert.Equal(new[] { 259,315,317,318,332,344,346,359,372,373,386 }, e.Board.Placements[1].Order());
         Assert.Equal(3270, e.Monster.Definition); Assert.Equal(1, e.Monster.Grade); Assert.Equal(1, e.Monster.Level);
         Assert.Equal(15, e.Monster.Life); Assert.Equal(2, e.Monster.ActionPoints); Assert.Equal(3, e.Monster.MovementPoints);
         Assert.Equal(3253, e.Monster.Look.BoneId);

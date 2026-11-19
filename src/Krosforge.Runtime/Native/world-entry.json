@@ -33,6 +33,7 @@
     "PredictionLeadMilliseconds": 50
   },
   "WorldMap": 2,
+  "DefaultBattleMap": 153888768,
   "SurfaceMaps": [
     {
       "Id": 154011398,

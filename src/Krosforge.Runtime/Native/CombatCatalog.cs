@@ -14,8 +14,9 @@ internal sealed record CombatMonster(int Definition, int Grade, int Level, int L
 internal sealed record CombatReward(long Currency, bool RestoreFullLife);
 internal sealed record CombatOpponent(long Actor, int Cell, CombatMonster Monster);
 internal sealed record CombatEncounter(long Map, long GroupId, int GroupCell, int Direction, int AttackDistance,
-    int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, CombatBoard Board)
+    int FightType, int PlayerCell, int MonsterCell, CombatMonster Monster, BattleMap Battle)
 {
+    internal CombatBoard Board => Battle.Board;
     internal CombatReward Reward { get; init; } = new(0, true);
     internal ImmutableArray<CombatOpponent> Companions { get; init; } = [];
     internal IEnumerable<CombatOpponent> Opponents => new[] { new CombatOpponent(-1, MonsterCell, Monster) }.Concat(Companions);
@@ -66,10 +67,10 @@ internal sealed class CombatCatalog
         Encounters = config.Encounters.Select(definition =>
         {
             var map = world.Map(definition.Map);
-            var board = map.Combat ?? throw new InvalidDataException("Combat geometry missing.");
+            var battle = map.Battle ?? throw new InvalidDataException("Combat geometry missing.");
             return new CombatEncounter(map.Id, definition.GroupId, definition.GroupCell, definition.Direction, definition.AttackDistance,
                 definition.FightType, definition.PlayerCell, definition.MonsterCell,
-                ReadMonster(definition.MonsterId, definition.Grade), board)
+                ReadMonster(definition.MonsterId, definition.Grade), battle)
             {
                 Reward = definition.Reward,
                 Companions = (definition.Companions ?? []).Select((companion, index) =>
@@ -85,7 +86,8 @@ internal sealed class CombatCatalog
         foreach (var e in Encounters)
         {
             if (e.GroupId >= -1 || e.Direction is < 0 or > 7 || e.AttackDistance is < 1 or > 560 || e.FightType is < 0 or > 10 ||
-                !world.Map(e.Map).WalkableCells.Contains(e.GroupCell) || e.Companions.IsDefault || e.Companions.Length > 7 ||
+                !world.Map(e.Map).WalkableCells.Contains(e.GroupCell) || e.Battle != world.Map(e.Map).Battle ||
+                e.Companions.IsDefault || e.Companions.Length > 7 ||
                 e.Opponents.Select(m => m.Actor).Distinct().Count() != e.Companions.Length + 1 ||
                 e.Opponents.Any(m => m.Actor >= 0 || m.Monster.Definition <= 0 || m.Monster.Grade <= 0 ||
                     m.Monster.Level <= 0 || m.Monster.Life <= 0 || m.Monster.ActionPoints <= 0 || m.Monster.MovementPoints < 0) ||

@@ -75,8 +75,8 @@ internal static partial class CombatWire
     }
     private static byte[][] Load(CombatView view) =>
     [
-        E("jnj", J(N(10, view.Map.Id), N(12, view.Map.Subarea), B(11, J(N(1, 1), N(3, 1))))),
-        E("jnv", WorldEntryWire.Reference(view.Map)),
+        E("jnj", J(N(10, view.Encounter.Battle.Id), N(12, view.Encounter.Battle.Subarea), B(11, J(N(1, 1), N(3, 1))))),
+        E("jnv", WorldEntryWire.Reference(view.Encounter.Battle.Id, view.Encounter.Battle.Subarea)),
         E("jww", J(N(2, 1), N(4, 1), N(5, view.Encounter.FightType))),
         .. view.Positions.OrderByDescending(p => p.Controlled).ThenByDescending(p => p.ActorId).Select(p => E("jwj", B(1, Fighter(view, p)))),
         E("jxk", J(B(1, Zones(view.Encounter.Board)), N(2, 0))),
@@ -87,7 +87,8 @@ internal static partial class CombatWire
     {
         EncounterAppeared shown => [E("jns", B(1, Group(shown.Encounter)))],
         EncounterDeparted gone => [E("kjz", N(1, gone.Group))],
-        FightEntered enter => [E("kjy", []), E("kjp", N(1, 1)), E("jxi", J(N(1, enter.Id), N(6, enter.Encounter.FightType))), E("jow", N(1, enter.Encounter.Map))],
+        BattleMapPreview preview => [E("jvk", J(N(1, preview.Source), B(2, Zones(preview.Battle.Board)), N(4, preview.Battle.Id)))],
+        FightEntered enter => [E("kjy", []), E("kjp", N(1, 1)), E("jxi", J(N(1, enter.Id), N(6, enter.Encounter.FightType))), E("jow", N(1, enter.Encounter.Battle.Id))],
         FightLoaded loaded => Load(loaded.View),
         FightPositions changed => [E("jws", J(changed.Positions.Select(p => B(2, J(N(2, p.ActorId), N(3, p.Cell)))).ToArray()))],
         FightStarted started => [E("jxr", []), E("jvu", J(started.Order.Select(id => B(1, B(2, J(N(1, id), B(3, []))))).ToArray()))],
