@@ -14,6 +14,8 @@ The prospecting coefficient follows the pinned nonlinear formula. A configured d
 
 An increase in level also publishes the native level notification before the combat result. The previous level is captured when entering the encounter, before the durable award changes the selected character. This updates the live character model rather than relying on reconnect. Same-build `esf.zbb` at `0x181896bb0` consumes field 1 of `kqp` and invokes the level-state update and level-up publisher at `0x1818a5ed0`. Unchanged levels do not publish this notification, and duplicate combat acknowledgements do not repeat it.
 
+Independent observations through the original reference-build UI provide two additional XP fixtures. In Incarnam `[-2,-3]`, a level-2 character with 5 wisdom sees 73 XP for one level-3 monster, and 262 XP for a group at levels 3, 3, 2 and 1. The implemented group and individual stages reproduce both values. These are displayed pre-combat estimates; they do not establish challenge bonuses or every possible official combat outcome.
+
 ## Loot eligibility and item generation
 
 The runtime reads regular drops by monster grade and global drop conditions from the pinned monster bundle. Item effects and their fixed/random parameter policy come from the pinned item and effect bundles. Numeric references are resolved before rolling; variable equipment bonuses are rolled while fixed dice effects retain their ranges. One eligible successful roll adds one item for the controlled participant, subject to the source maximum. A catalog count such as 63 is not interpreted as a 63-item stack.

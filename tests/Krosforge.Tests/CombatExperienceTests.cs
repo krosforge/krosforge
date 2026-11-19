@@ -6,6 +6,17 @@ public sealed class CombatExperienceTests
 {
     private static readonly GroupExperienceRules GroupRules = new([1, 1.1, 1.5, 2.3, 3.1, 3.6, 4.2, 4.7, 5.15, 5.55, 5.9, 6.2], 5, 10);
     private static readonly PlayerExperienceRules PlayerRules = new(2.5, 2_000_000_000);
+    [Theory]
+    [InlineData(false, 73)]
+    [InlineData(true, 262)]
+    public void OfficialIncarnamTooltipsMatchForLevelTwoWithFiveWisdom(bool group, long expected)
+    {
+        // Observed independently through the original 3.7.14.18 UI in [-2,-3].
+        // One level-3 monster, or four monsters at levels 3, 3, 2, 1.
+        ExperienceMonster[] monsters = group ? [new(3, 70), new(3, 70), new(2, 60), new(1, 50)] : [new(3, 70)];
+        var shared = CombatExperience.Group([new(2)], monsters, true, 1, GroupRules);
+        Assert.Equal(expected, CombatExperience.Individual(shared, monsters, 2, 5, 2, 1, 1, 1, PlayerRules));
+    }
     [Fact]
     public void CurveHandlesExactThresholdsMultipleLevelsAndInvalidInputs()
     {
