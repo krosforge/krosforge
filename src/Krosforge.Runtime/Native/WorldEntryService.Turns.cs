@@ -4,8 +4,14 @@ namespace Krosforge.Runtime.Native;
 internal sealed record CombatTiming(int TurnMilliseconds = 30000, int AnimationMilliseconds = 15000,
     int ReadyMilliseconds = 5000, int AutomaticMilliseconds = 250);
 internal sealed record FightTurn(CombatFighter Player, int Level, long NextExperience, long Actor, int Round,
-    int Order, int Milliseconds, bool Confirmed) : WorldNotice;
-internal sealed record FightAction(long Observer, int Sequence, CombatAction Action, CombatFighter Player, int Level, long NextExperience) : WorldNotice;
+    int Order, int Milliseconds, bool Confirmed) : WorldNotice
+{
+    internal EntryAttributes? Attributes { get; init; }
+}
+internal sealed record FightAction(long Observer, int Sequence, CombatAction Action, CombatFighter Player, int Level, long NextExperience) : WorldNotice
+{
+    internal EntryAttributes? Attributes { get; init; }
+}
 internal sealed record FightTurnEnding : WorldNotice;
 internal sealed record FightActionRejected : WorldNotice;
 
@@ -17,14 +23,19 @@ internal sealed partial class WorldEntryService
     private void StartTurns(Selection selection, FightSession fight)
     {
         if (spells is null) return;
-        var attributes = selection.Attributes; var monster = fight.Encounter.Monster;
+        var attributes = selection.Attributes;
+        CombatFighter Opponent(CombatPlacement position)
+        {
+            var monster = fight.Encounter.MonsterFor(position.ActorId);
+            return new(position.ActorId, position.Team, false, position.Cell, monster.Life, monster.Life,
+                monster.ActionPoints, monster.ActionPoints, monster.MovementPoints, monster.MovementPoints,
+                monster.Statistics, spells.Monster(monster.Spells, monster.SpellGrades.Count == 0 ? null : monster.SpellGrades));
+        }
         fight.Turns = new(fight.Encounter.Board, fight.Preparation.Fighters.Select(position => position.Controlled
             ? new CombatFighter(position.ActorId, position.Team, true, position.Cell, attributes.Life, attributes.Life,
                 attributes.ActionPoints, attributes.ActionPoints, attributes.MovementPoints, attributes.MovementPoints,
                 CombatStatistics.Empty, spells.Player(selection.Character.BreedId))
-            : new CombatFighter(position.ActorId, position.Team, false, position.Cell, monster.Life, monster.Life,
-                monster.ActionPoints, monster.ActionPoints, monster.MovementPoints, monster.MovementPoints,
-                monster.Statistics, spells.Monster(monster.Spells))));
+            : Opponent(position)));
         selection.Emit(new FightStarted(fight.Turns.Order));
         PublishTurn(selection, fight, false);
         fight.Tick = RunCombatClock(selection, fight);
@@ -36,7 +47,7 @@ internal sealed partial class WorldEntryService
         fight.AutomaticAt = After(combatTiming.AutomaticMilliseconds);
         fight.EndRequested = false; fight.AwaitingReady = false;
         selection.Emit(new FightTurn(turns.Fighters.Single(f => f.Controlled), selection.Character.Level,
-            selection.Attributes.NextLevelExperience, turns.Current.Id, turns.Round, turns.OrderIndex, combatTiming.TurnMilliseconds, confirmed));
+            selection.Attributes.NextLevelExperience, turns.Current.Id, turns.Round, turns.OrderIndex, combatTiming.TurnMilliseconds, confirmed) { Attributes = selection.Attributes });
     }
     private async Task RunCombatClock(Selection selection, FightSession fight)
     {
@@ -82,10 +93,9 @@ internal sealed partial class WorldEntryService
         var actor = turns.Current;
         var opponent = turns.Fighters.Where(f => f.Alive && f.Team != actor.Team).OrderBy(f => f.Id).FirstOrDefault();
         if (opponent is null) return;
-        foreach (var spell in actor.Spells)
+        if (turns.AutomaticCast() is { } automatic)
         {
-            if (!turns.CanCast(actor.Id, turns.Serial, spell.Id, opponent.Cell)) continue;
-            var cast = turns.Cast(actor.Id, turns.Serial, spell.Id, opponent.Cell, Roll)!;
+            var cast = turns.Cast(actor.Id, turns.Serial, automatic.Spell, automatic.Cell, Roll)!;
             PublishAction(selection, fight, cast); return;
         }
         var path = turns.Approach(actor.Id, turns.Serial, opponent.Cell);
@@ -130,7 +140,7 @@ internal sealed partial class WorldEntryService
         if (fight.Turns!.Finished && outcomes is not null) CommitCombat(selection, fight, false);
         fight.Sequence = checked(++lastCombatSequence); fight.AnimationDeadline = After(combatTiming.AnimationMilliseconds);
         selection.Emit(new FightAction(selection.Character.Id, fight.Sequence.Value, action,
-            fight.Turns!.Fighters.Single(f => f.Controlled), selection.Character.Level, selection.Attributes.NextLevelExperience));
+            fight.Turns!.Fighters.Single(f => f.Controlled), selection.Character.Level, selection.Attributes.NextLevelExperience) { Attributes = selection.Attributes });
     }
     internal void CombatAcknowledge(Selection selection, int sequence)
     {

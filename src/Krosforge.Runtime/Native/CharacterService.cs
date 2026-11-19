@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using Krosforge.Core;
 namespace Krosforge.Runtime.Native;
 
-internal sealed class CharacterService(CharacterStore store, CreationCatalog catalog)
+internal sealed class CharacterService(CharacterStore store, CreationCatalog catalog, ExperienceCurve? experience = null)
 {
     internal CharacterWire[] List(Guid profile) => store.List(profile, ServerPresentation.RealmId).Select(c =>
     {
@@ -11,7 +11,8 @@ internal sealed class CharacterService(CharacterStore store, CreationCatalog cat
         (int Bone, int[] Skins, int[] Scales) look;
         try { look = catalog.Look(a); }
         catch (ArgumentException error) { throw new InvalidDataException("Invalid persisted appearance.", error); }
-        return new CharacterWire(c.Id, c.Name, a.Breed, a.Gender, a.Head, a.Body, 1,
+        var level = experience?.At(c.Experience).Level ?? (c.Experience == 0 ? 1 : throw new InvalidDataException("Experience curve missing."));
+        return new CharacterWire(c.Id, c.Name, a.Breed, a.Gender, a.Head, a.Body, level,
             new EntityLookWire(look.Bone, look.Skins.ToImmutableArray(), a.Colors.ToImmutableArray(), look.Scales.ToImmutableArray()));
     }).ToArray();
     internal string Create(Guid profile, CharacterDraftWire draft)

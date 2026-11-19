@@ -3,7 +3,11 @@ namespace Krosforge.Runtime.Native;
 
 internal sealed record WorldActor(CharacterWire Character, long Account, WorldLocation Location);
 internal abstract record WorldNotice;
-internal sealed record MapSnapshot(EntryMap Map, IReadOnlyList<WorldActor> Actors, IReadOnlyList<CombatEncounter>? Encounters = null, int? NeutralCalendar = null) : WorldNotice;
+internal sealed record RewardRates(int ExperiencePercent = 100, int DropPercent = 100);
+internal sealed record MapSnapshot(EntryMap Map, IReadOnlyList<WorldActor> Actors, IReadOnlyList<CombatEncounter>? Encounters = null, int? NeutralCalendar = null) : WorldNotice
+{
+    internal RewardRates? Rates { get; init; }
+}
 internal sealed record ActorAppeared(WorldActor Actor) : WorldNotice;
 internal sealed record ActorDeparted(long Id) : WorldNotice;
 internal sealed record ActorMoved(long Id, IReadOnlyList<int> Cells) : WorldNotice;

@@ -34,7 +34,8 @@ internal static class WorldEntryWire
         var stats = J(Usable(0, attributes.Life), Simple(95, attributes.Life), Simple(96, 0), Simple(97, 0),
             Simple(5, level), Usable(3, 0), Usable(11, 0), Simple(102, 0),
             Usable(1, attributes.ActionPoints), Usable(23, attributes.MovementPoints),
-            N(11, 0), N(8, 0), N(2, attributes.NextLevelExperience), B(10, []));
+            Simple(29, attributes.Energy), Simple(48, attributes.Prospecting), Simple(109, attributes.Hunter),
+            N(11, attributes.Experience), N(8, attributes.ExperienceFloor), N(2, attributes.NextLevelExperience), N(6, attributes.Currency), B(10, []));
         return B(1, stats);
     }
     internal static byte[] Information(WorldEntryService.Selection selection)
@@ -55,7 +56,8 @@ internal static class WorldEntryWire
     }
     internal static byte[][] Events(WorldNotice notice) => notice switch
     {
-        MapSnapshot snapshot => [.. snapshot.NeutralCalendar is { } calendar ? new[] { WorldProtocol.Event("lov", N(3, calendar)) } : Array.Empty<byte[]>(), WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors, snapshot.Encounters)), WorldProtocol.Event("jnv", Reference(snapshot.Map))],
+        MapSnapshot snapshot => [.. snapshot.NeutralCalendar is { } calendar ? new[] { WorldProtocol.Event("lov", N(3, calendar)) } : Array.Empty<byte[]>(), WorldProtocol.Event("jnj", Information(snapshot.Map, snapshot.Actors, snapshot.Encounters)), WorldProtocol.Event("jnv", Reference(snapshot.Map)),
+            .. snapshot.Rates is { } rates ? new[] { WorldProtocol.Event("hme", J(N(3, rates.ExperiencePercent), N(4, rates.DropPercent), N(5, 100))) } : Array.Empty<byte[]>()],
         ActorAppeared appeared => [WorldProtocol.Event("jns", B(1, Actor(appeared.Actor)))],
         ActorDeparted departed => [WorldProtocol.Event("kjz", N(1, departed.Id))],
         ActorMoved moved => [WorldProtocol.Event("jnz", WorldMovementWire.Movement(moved.Id, moved.Cells))],

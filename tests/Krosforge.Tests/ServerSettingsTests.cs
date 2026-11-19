@@ -12,6 +12,49 @@ public sealed class ServerSettingsTests : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "server-settings-" + Guid.NewGuid().ToString("N"));
     [Fact]
+    public void RewardRatesPersistTogetherAndLegacyRenamePreservesThem()
+    {
+        using (var runtime = new RuntimeService(root))
+        {
+            Assert.Equal(new ServerSettings("Krosforge"), Snapshot(runtime).Server);
+            var settings = new ServerSettings("Local", 2.5m, 3m);
+            Assert.True(runtime.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(settings))).Success);
+            Assert.True(runtime.Handle(new(Wire.Version, "configure-server", Value: "Renamed")).Success);
+        }
+        using var restarted = new RuntimeService(root);
+        Assert.Equal(new ServerSettings("Renamed", 2.5m, 3m), Snapshot(restarted).Server);
+        foreach (var invalid in new[] { new ServerSettings("Invalid", -1m, 1m), new("Invalid", 1m, 1001m) })
+            Assert.False(restarted.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(invalid))).Success);
+        Assert.False(restarted.Handle(new(Wire.Version, "configure-server-settings", Value: "malformed")).Success);
+        Assert.Equal(new ServerSettings("Renamed", 2.5m, 3m), Snapshot(restarted).Server);
+    }
+    [Theory]
+    [InlineData("-0.01")]
+    [InlineData("100.01")]
+    [InlineData("1000")]
+    [InlineData("0.001")]
+    public void InvalidOrUnrepresentableRatesCannotPartiallyChangeTheSavedConfiguration(string value)
+    {
+        var invalid = decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+        using var runtime = new RuntimeService(root);
+        var saved = new ServerSettings("Local", 0.01m, 100m);
+        Assert.True(runtime.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(saved))).Success);
+        foreach (var settings in new[] { new ServerSettings("Changed", invalid, 1), new("Changed", 1, invalid) })
+        {
+            var response = runtime.Handle(new(Wire.Version, "configure-server-settings", Value: JsonSerializer.Serialize(settings)));
+            Assert.False(response.Success); Assert.Equal("ErrorServerRates", response.Error);
+            Assert.Equal(saved, Snapshot(runtime).Server);
+        }
+    }
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("0.01", 1)]
+    [InlineData("1", 100)]
+    [InlineData("2.55", 255)]
+    [InlineData("100", 10000)]
+    public void SupportedRatesHaveAnExactNativePercentage(string multiplier, int expected) =>
+        Assert.Equal(expected, ServerRewardRates.Percentage(decimal.Parse(multiplier, System.Globalization.CultureInfo.InvariantCulture)));
+    [Fact]
     public void DefaultAndRenameSurviveRestartWithoutChangingProfiles()
     {
         Guid id;
@@ -39,6 +82,7 @@ public sealed class ServerSettingsTests : IDisposable
         var response = runtime.Handle(new(Wire.Version, "configure-server", Value: "Changed"));
         Assert.False(response.Success);
         Assert.Equal("ErrorCloseGameFirst", response.Error);
+        Assert.Equal("ErrorCloseGameFirst", runtime.Handle(new(Wire.Version, "configure-server-settings", Value: "{}")).Error);
         Assert.Equal("Krosforge", Snapshot(runtime).Server!.Name);
     }
     [Theory]

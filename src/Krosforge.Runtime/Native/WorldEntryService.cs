@@ -2,7 +2,7 @@ using Krosforge.Core;
 using Microsoft.Data.Sqlite;
 namespace Krosforge.Runtime.Native;
 
-internal sealed partial class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null, CombatCatalog? combat = null, CombatSpellCatalog? spells = null, CombatOutcomeStore? outcomes = null)
+internal sealed partial class WorldEntryService(CharacterService characters, LocationStore locations, WorldEntryCatalog catalog, TimeProvider? time = null, CombatCatalog? combat = null, CombatSpellCatalog? spells = null, CombatOutcomeStore? outcomes = null, CombatRewardCalculator? rewards = null)
 {
     // Local accounts share one coordinator. It only holds short state/SQLite
     // operations; socket writes happen in independent bounded output queues.
@@ -25,10 +25,18 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
     {
         internal Guid Profile { get; } = profile;
         internal object Connection { get; } = connection;
-        internal CharacterWire Character { get; } = character;
+        internal CharacterWire Character { get; set; } = character;
         internal long Account { get; } = account;
         internal WorldLocation Location { get; set; } = null!;
-        internal EntryAttributes Attributes => owner.catalog.Attributes;
+        internal EntryAttributes Attributes
+        {
+            get
+            {
+                var band = owner.catalog.Experience.At(Rewards.Experience);
+                return owner.catalog.Attributes with { Experience = Rewards.Experience, ExperienceFloor = band.Floor, NextLevelExperience = band.Ceiling, Currency = Currency };
+            }
+        }
+        internal CharacterRewards Rewards { get; set; } = new(0, []);
         internal long Currency { get; set; }
         internal EntryMap Map => owner.catalog.Map(Location.MapId);
         internal bool ContextCreated { get; set; }
@@ -60,6 +68,8 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
                 MovementAvailableAt = EarliestPredictionStart(),
                 Currency = outcomes?.Recover(profile, ServerPresentation.RealmId, id) ?? 0
             };
+            selection.Rewards = outcomes?.Read(profile, ServerPresentation.RealmId, id) ?? new(0, []);
+            selection.Character = selection.Character with { Level = catalog.Experience.At(selection.Rewards.Experience).Level };
             active.Add(id, selection); return selection;
         }
     }
@@ -79,7 +89,8 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             selection.MapReady = true;
             var now = clock.GetTimestamp();
             var visible = Members(map).OrderBy(s => s.Character.Id).ToArray();
-            selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray(), AvailableEncounters(map), combat?.NeutralCalendar));
+            selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray(), AvailableEncounters(map), combat?.NeutralCalendar)
+                { Rates = rewards?.Presentation ?? new() });
             foreach (var other in visible)
                 if (other.Moving is { Announced: true } motion)
                 {

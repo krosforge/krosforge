@@ -3,7 +3,17 @@ namespace Krosforge.Contracts;
 
 public sealed record Profile(Guid Id, string Name, long Slot);
 public sealed record Installation(string Path, string Build);
-public sealed record ServerSettings(string Name);
+public sealed record ServerSettings(string Name, decimal ExperienceMultiplier = 1m, decimal DropMultiplier = 1m);
+public static class ServerRewardRates
+{
+    public const decimal MaximumMultiplier = 100m;
+    public static int Percentage(decimal multiplier)
+    {
+        if (multiplier is < 0 or > MaximumMultiplier || decimal.Round(multiplier, 2) != multiplier)
+            throw new ArgumentException("ErrorServerRates");
+        return checked((int)(multiplier * 100m));
+    }
+}
 public sealed record Snapshot(Profile[] Profiles, Installation? Installation, bool HasActiveClients = false, ServerSettings? Server = null);
 public sealed record LaunchStatus(Guid ProfileId, string Stage, long BytesCopied, long TotalBytes, string? Error = null, int? ProcessId = null);
 public sealed record Request(int Version, string Operation, Guid? ProfileId = null, string? Value = null, string? Confirmation = null);

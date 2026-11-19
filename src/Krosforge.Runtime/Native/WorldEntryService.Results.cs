@@ -3,7 +3,10 @@ namespace Krosforge.Runtime.Native;
 
 internal sealed record FightResultFighter(long Id, bool Alive, bool Won, int? Level);
 internal sealed record FightCompleted(CharacterWire Character, EntryAttributes Attributes, IReadOnlyList<FightResultFighter> Fighters,
-    CombatReceipt Receipt, CombatSummary Summary) : WorldNotice;
+    CombatReceipt Receipt, CombatSummary Summary) : WorldNotice
+{
+    internal int? PreviousLevel { get; init; }
+}
 
 internal sealed partial class WorldEntryService
 {
@@ -15,10 +18,15 @@ internal sealed partial class WorldEntryService
         var won = turns is { Finished: true, WinningTeam: 0 };
         var status = won ? "victory" : forfeit && turns is not { Finished: true } ? "abandoned" : "defeat";
         var duration = fight.Started ? Math.Max(0, (long)clock.GetElapsedTime(fight.StartedAt, clock.GetTimestamp()).TotalMilliseconds) : 0;
+        fight.Award ??= rewards?.Calculate(fight.Encounter, selection.Character.Level, 0, won,
+            selection.Attributes.Prospecting, selection.Attributes.Hunter, selection.Rewards.Items) ?? new(0, []);
         fight.Receipt = outcomes!.Complete(selection.Profile, ServerPresentation.RealmId, selection.Character.Id,
             fight.DurableId ?? throw new InvalidOperationException("Combat has no durable identity."), status,
-            won ? fight.Encounter.Reward.Currency : 0, duration);
+            won ? fight.Encounter.Reward.Currency : 0, duration,
+            award: fight.Award);
         selection.Currency = fight.Receipt.Balance;
+        selection.Rewards = fight.Receipt.State;
+        selection.Character = selection.Character with { Level = catalog.Experience.At(selection.Rewards.Experience).Level };
     }
     private void FinishCombat(Selection selection, FightSession fight, bool forfeit)
     {
@@ -28,7 +36,7 @@ internal sealed partial class WorldEntryService
             fight.Turns?.Fighters.Single(f => f.Id == p.ActorId).Alive ?? true,
             p.Controlled == won, p.Controlled ? selection.Character.Level : null)).ToArray();
         selection.Emit(new FightCompleted(selection.Character, selection.Attributes, fighters, fight.Receipt,
-            fight.Turns?.Summary(selection.Character.Id) ?? new()));
+            fight.Turns?.Summary(selection.Character.Id) ?? new()) { PreviousLevel = fight.InitialLevel });
         ReleaseFight(selection);
         selection.MapReady = false;
         selection.MovementAvailableAt = EarliestPredictionStart();

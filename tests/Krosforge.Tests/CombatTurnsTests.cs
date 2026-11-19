@@ -128,6 +128,20 @@ public sealed class CombatTurnsTests
         Assert.Equal(new CombatDamage(CombatElement.Water, 7, 9), ranged.Damage); Assert.True(ranged.LineOfSight);
         var enemy = Assert.Single(catalog.Monster([5866])); Assert.Equal(25445, enemy.LevelId);
         Assert.Equal(new CombatDamage(CombatElement.Fire, 6, 10), enemy.Damage);
+        var ranked = Assert.Single(catalog.Monster([5866], new Dictionary<int, int> { [5866] = 4 }));
+        Assert.Equal(4, ranked.Grade); Assert.Equal(new CombatDamage(CombatElement.Air, 6, 10), ranked.Damage);
+        Assert.Throws<InvalidDataException>(() => catalog.Monster([5866], new Dictionary<int, int>()));
+        Assert.Throws<InvalidDataException>(() => catalog.Monster([5866], new Dictionary<int, int> { [5866] = 99 }));
         Assert.Throws<InvalidDataException>(() => catalog.Monster([123456]));
+    }
+    [Fact]
+    public void MonsterSpellRankUsesTheCatalogLevelMappingAndRejectsMissingOrAmbiguousValues()
+    {
+        var ranks = CombatCatalog.ReadSpellGrades([17, 18], ["4,1;3,2", "2,1;1,2"], 1);
+        Assert.Equal(4, ranks[17]); Assert.Equal(2, ranks[18]);
+        Assert.Equal(3, CombatCatalog.ReadSpellGrades([17], ["4,1;3,2"], 2)[17]);
+        Assert.Throws<InvalidDataException>(() => CombatCatalog.ReadSpellGrades([17], [], 1));
+        foreach (var malformed in new[] { "1,1;2,1", "1,2", "1", "0,1", "1,-1", "1,1;" })
+            Assert.Throws<InvalidDataException>(() => CombatCatalog.ReadSpellGrades([17], [malformed], 1));
     }
 }

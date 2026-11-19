@@ -37,7 +37,7 @@ Native logs are written under `Krosforge-data/logs/<profile-id>`. The native cli
 
 ## Local server presentation
 
-The runtime advertises one classic, multiple-account realm. Its technical identifier remains stable when the player renames it through **Configure server**. The name is stored in SQLite (`settings`, key `server.name`), defaults to Krosforge, and is returned in the runtime snapshot. Configuration changes are rejected while any profile is preparing or running.
+The runtime advertises one classic, multiple-account realm. Its technical identifier remains stable when the player renames it through **Configure server**. The name and separate XP/drop multipliers are stored together in SQLite (`settings`, key `server.configuration`) and returned in the runtime snapshot. Defaults are Krosforge and 1× for both rates. Older `server.name` values are read until the configuration is saved. Configuration changes are rejected while any profile is preparing or running.
 
 Before a native session starts, the runtime overrides the realm name's integer localization entry in all five language files under the shared copy. Original language files are pinned by SHA-256 for build `3.7.14.18` and remain read-only. Each output preserves the original bytes except for that entry's offset and an appended UTF-8 string. Renames regenerate from the original, so repeated changes do not accumulate data. No bundle rewriting or external patching executable is needed.
 

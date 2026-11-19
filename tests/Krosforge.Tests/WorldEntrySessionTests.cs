@@ -52,19 +52,24 @@ public sealed partial class WorldSessionTests
             Assert.Equal(0UL, (await Event(world, "kjp", token)).UInt64(1));
             Assert.Equal(100UL, (await Event(world, "jow", token)).UInt64(1));
             var inventory = await Event(world, "irl", token); Assert.Equal(0UL, inventory.UInt64(4)); Assert.True(inventory.Has(3));
+            Assert.Equal(0UL, (await Event(world, "ith", token)).UInt64(2));
             var statistics = ProtoObject.Read((await Event(world, "krg", token)).Bytes(1), 128);
             Assert.Equal(110UL, statistics.UInt64(2));
             var entries = statistics.Repeated(1).Select(f => ProtoObject.Read(f.Bytes, 128)).ToDictionary(e => e.UInt64(2));
             Assert.Equal(100UL, ProtoObject.Read(entries[95].Bytes(3), 128).UInt64(2));
             Assert.Equal(6UL, ProtoObject.Read(entries[1].Bytes(1), 128).UInt64(4));
             Assert.Equal(3UL, ProtoObject.Read(entries[23].Bytes(1), 128).UInt64(4));
+            // Native BestiaryTabUI dereferences both entries while binding the row,
+            // before it can finish the monster category and loot presentation.
+            Assert.Equal(10000UL, ProtoObject.Read(entries[29].Bytes(3), 128).UInt64(2));
+            Assert.Equal(100UL, ProtoObject.Read(entries[48].Bytes(3), 128).UInt64(2));
             if (!loseDuringLoading) await AssertMap(world, id, a.Slot, token);
             world.Client.LingerState = new LingerOption(true, 0); world.Dispose();
             await disconnected.Task.WaitAsync(token);
             using var fresh = new TcpClient(); await Login(host, fresh, session.IssueTicket(), token);
             using var reentered = await Enter(host, fresh, token, emptyRoster: false);
             await Send(reentered, "kta", WorldProtocol.Number(1, (ulong)id), token); Assert.True((await Event(reentered, "ksb", token)).Has(1));
-            await Send(reentered, "kkc", [], token); await Event(reentered, "kjp", token); await Event(reentered, "jow", token); await Event(reentered, "irl", token); await Event(reentered, "krg", token);
+            await Send(reentered, "kkc", [], token); await Event(reentered, "kjp", token); await Event(reentered, "jow", token); await Event(reentered, "irl", token); await Event(reentered, "ith", token); await Event(reentered, "krg", token);
             await AssertMap(reentered, id, a.Slot, token);
             await Send(otherWorld, "kne", WorldProtocol.Number(2, 1), token); await Event(otherWorld, "knb", token);
             Assert.Equal(new WorldLocation(100, 10, 3, 1), new LocationStore(root).LoadOrCreate(a.Id, 290, id,
@@ -87,6 +92,7 @@ public sealed partial class WorldSessionTests
         Assert.Equal("Hero", humanoid.Text(5)); var player = ProtoObject.Read(humanoid.Bytes(1), 128);
         Assert.Equal((ulong)account, player.UInt64(2)); Assert.Equal(0UL, player.UInt64(7)); Assert.True(player.Has(6));
         var reference = await Event(world, "jnv", token); Assert.Equal(100UL, reference.UInt64(3)); Assert.Equal(25UL, reference.UInt64(5));
+        var rates = await Event(world, "hme", token); Assert.Equal(100UL, rates.UInt64(3)); Assert.Equal(100UL, rates.UInt64(4)); Assert.Equal(100UL, rates.UInt64(5));
     }
     [Fact]
     public void ReleasingAnOldSelectionCannotReleaseItsReplacement()

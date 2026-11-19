@@ -40,14 +40,15 @@ internal static partial class CombatWire
         foreach (var id in new[] { 107, 120, 121, 122, 123, 124, 125, 141, 142, 150 }) yield return Usable(id, 100, 100);
         yield return Usable(75, 0, 0);
     }
-    private static byte[] Statistics(CombatFighter player, int level, long nextExperience)
+    private static byte[] Statistics(CombatFighter player, int level, long nextExperience, EntryAttributes? attributes)
     {
         var entries = new[] { Usable(0, player.MaximumLife, player.MaximumLife), Simple(95, player.MaximumLife),
             Simple(96, 0), Simple(97, player.Life - player.MaximumLife), Simple(102, 0), Simple(5, level),
             Usable(1, player.MaximumAp, player.Ap, player.MaximumAp - player.Ap),
-            Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp), Usable(3, 0, 0), Usable(11, 0, 0) };
+            Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp), Usable(3, 0, 0), Usable(11, 0, 0),
+            Simple(29, attributes?.Energy ?? 10000), Simple(48, attributes?.Prospecting ?? 100), Simple(109, attributes?.Hunter ?? 0) };
         return B(1, J(entries.Concat(Attributes(player.Statistics)).Select(entry => B(1, entry))
-            .Concat([N(11, 0), N(8, 0), N(2, nextExperience), B(10, [])]).ToArray()));
+            .Concat([N(11, attributes?.Experience ?? 0), N(8, attributes?.ExperienceFloor ?? 0), N(2, nextExperience), N(6, attributes?.Currency ?? 0), B(10, [])]).ToArray()));
     }
     private static byte[] Action(long source, int id, int variant, byte[] payload) => E("jsq", J(N(22, id), N(36, source), B(variant, payload)));
     private static byte[] Points(long actor, bool movement, int delta) => Action(actor, movement ? 129 : 102, 13, J(N(2, delta), N(3, actor)));
@@ -66,27 +67,32 @@ internal static partial class CombatWire
             result.Add(Action(action.Actor, 300, 2, J(B(1, []), identity, N(5, cast.Cell),
                 cast.Target is { } target ? N(6, target) : [], cast.Critical ? N(8, 1) : [])));
             result.Add(Points(action.Actor, false, -cast.Spell.Cost));
-            if (cast.Damage > 0 && cast.Target is { } victim)
+            IEnumerable<CombatEffectResult> resolved = cast.Resolved.IsDefaultOrEmpty
+                ? cast.Damage > 0 && cast.Target is { } victim ? [new CombatLifeLost(victim, cast.Spell.Damage.Element, cast.Damage, cast.Killed)] : []
+                : cast.Resolved;
+            foreach (var effect in resolved)
             {
-                var element = cast.Spell.Damage.Element;
-                var (damageAction, wireElement) = element switch
+                if (effect is CombatLifeGained gain)
+                { result.Add(Action(action.Actor, 108, 39, J(N(2, gain.Target), N(4, gain.Amount)))); continue; }
+                if (effect is not CombatLifeLost hit) throw new InvalidDataException("Unsupported resolved combat effect.");
+                var (damageAction, wireElement) = hit.Element switch
                 {
                     CombatElement.Neutral => (100, 0), CombatElement.Earth => (97, 1), CombatElement.Fire => (99, 2),
-                    CombatElement.Water => (96, 3), CombatElement.Air => (98, 4), _ => throw new ArgumentOutOfRangeException(nameof(element))
+                    CombatElement.Water => (96, 3), CombatElement.Air => (98, 4), _ => throw new ArgumentOutOfRangeException(nameof(hit.Element))
                 };
-                result.Add(Action(action.Actor, damageAction, 37, J(N(1, 0), N(4, wireElement), N(5, victim), N(6, cast.Damage))));
-                if (cast.Killed) result.Add(Action(action.Actor, 141, 3, N(2, victim)));
+                result.Add(Action(action.Actor, damageAction, 37, J(N(1, 0), N(4, wireElement), N(5, hit.Target), N(6, hit.Amount))));
+                if (hit.Killed) result.Add(Action(action.Actor, 141, 3, N(2, hit.Target)));
             }
         }
         else throw new ArgumentOutOfRangeException(nameof(action));
         // Address the observing player; monster identities do not acknowledge animations.
         result.Add(E("jsy", J(N(2, notice.Sequence), N(3, 0), N(4, notice.Observer))));
-        result.Add(E("krg", Statistics(notice.Player, notice.Level, notice.NextExperience)));
+        result.Add(E("krg", Statistics(notice.Player, notice.Level, notice.NextExperience, notice.Attributes)));
         return result.ToArray();
     }
     private static byte[][] TurnEvents(FightTurn turn) =>
     [
-        E("krg", Statistics(turn.Player, turn.Level, turn.NextExperience)),
+        E("krg", Statistics(turn.Player, turn.Level, turn.NextExperience, turn.Attributes)),
         E("jvi", J(N(1, turn.Round), N(2, turn.Order))),
         E("jvj", J(N(2, turn.Milliseconds / 100), N(3, turn.Actor), N(6, turn.Order))),
         .. turn.Confirmed ? new[] { E("jte", []) } : Array.Empty<byte[]>()

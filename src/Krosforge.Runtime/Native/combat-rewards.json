@@ -1,0 +1,61 @@
+{
+  "Build": "3.7.14.18",
+  "Source": {
+    "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_luaformulasdataroot.asset.bundle",
+    "Sha256": "dce961d2a2673c1b76b24d0579fd0120550cfbc83827418a0a37a3cc5d095f03",
+    "Formulas": {
+      "99": "10b832ae6b0e0b9733310defcddca251102a5d542406b8e44bc030a08c5cebee",
+      "100": "330b9a98d2eb523d2ab93e303e2e7c50a87624b5dbe4b582a4203ea69aa1460e",
+      "106": "eed6e7fe112bba59879d08744686ac2de11000bec8525cbdde4111f22553ccc2"
+    }
+  },
+  "Group": {
+    "Bonuses": [
+      1,
+      1.1,
+      1.5,
+      2.3,
+      3.1,
+      3.6,
+      4.2,
+      4.7,
+      5.15,
+      5.55,
+      5.9,
+      6.2
+    ],
+    "LowerTolerance": 5,
+    "UpperTolerance": 10
+  },
+  "Player": {
+    "MonsterLevelCap": 2.5,
+    "MaximumExperience": 2000000000
+  },
+  "Prospecting": {
+    "Slope": 85,
+    "Midpoint": 150,
+    "MaximumPercent": 117,
+    "Amplitude": 1.5,
+    "Offset": 0.26,
+    "MaximumCoefficient": 2.5
+  },
+  "Loot": {
+    "Monsters": {
+      "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_monstersdataroot.asset.bundle",
+      "Sha256": "02a44dcd50e87333adf5218c5545901c819e1de52798139f67d8d6599dd8db00"
+    },
+    "Items": {
+      "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_itemsdataroot.asset.bundle",
+      "Sha256": "ea63bf34ee28072092c5063a6b81870b87dbc37b61723a08e1c605e0f47d6ccd"
+    },
+    "Effects": {
+      "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_effectsdataroot.asset.bundle",
+      "Sha256": "bbbd75fae62d97be57e6a718fdb46dab4ba58ad40778e7163d86e95168305fcc"
+    },
+    "Servers": {
+      "Path": "Dofus_Data/StreamingAssets/Content/Data/data_assets_serversdataroot.asset.bundle",
+      "Sha256": "cdc11dcd10bfb373460a77d4ef8da15163e8cbf2fbfeba474dc85e35c0ea9dde"
+    },
+    "Season": 0
+  }
+}

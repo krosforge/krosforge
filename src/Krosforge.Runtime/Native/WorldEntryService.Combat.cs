@@ -6,12 +6,14 @@ internal sealed record CombatView(long Id, EntryMap Map, CombatEncounter Encount
 
 internal sealed partial class WorldEntryService
 {
-    internal sealed class FightSession(long id, CombatEncounter encounter, long player)
+    internal sealed class FightSession(long id, CombatEncounter encounter, long player, int initialLevel)
     {
         internal long Id { get; } = id;
+        internal int InitialLevel { get; } = initialLevel;
         internal CombatEncounter Encounter { get; } = encounter;
         internal CombatPreparation Preparation { get; } = new(encounter.Board,
-            [new(player, 0, encounter.PlayerCell, true), new(-1, 1, encounter.MonsterCell, false, true)]);
+            new[] { new CombatPlacement(player, 0, encounter.PlayerCell, true) }
+                .Concat(encounter.Opponents.Select(m => new CombatPlacement(m.Actor, 1, m.Cell, false, true))));
         internal CombatTurns? Turns { get; set; }
         internal int? Sequence { get; set; }
         internal long Deadline { get; set; }
@@ -27,6 +29,7 @@ internal sealed partial class WorldEntryService
         internal long StartedAt { get; set; }
         internal Guid? DurableId { get; set; }
         internal CombatReceipt? Receipt { get; set; }
+        internal CombatAward? Award { get; set; }
     }
     private readonly Dictionary<long, Selection> claimedGroups = [];
     private long lastFight;
@@ -68,7 +71,7 @@ internal sealed partial class WorldEntryService
         {
             Attack(selection, encounter.GroupId); return;
         }
-        var fight = new FightSession(checked(++lastFight), encounter, selection.Character.Id);
+        var fight = new FightSession(checked(++lastFight), encounter, selection.Character.Id, selection.Character.Level);
         fight.DurableId = outcomes?.Begin(selection.Profile, ServerPresentation.RealmId, selection.Character.Id, encounter.GroupId, selection.Location);
         claimedGroups.Add(encounter.GroupId, selection);
         Broadcast(selection.Location.MapId, new EncounterDeparted(encounter.GroupId));
@@ -126,7 +129,7 @@ internal sealed partial class WorldEntryService
             if (!fight.Preparation.Start()) return;
             fight.Started = true;
             fight.StartedAt = clock.GetTimestamp();
-            if (spells is null) selection.Emit(new FightStarted([selection.Character.Id, -1]));
+            if (spells is null) selection.Emit(new FightStarted(fight.Preparation.Fighters.Select(p => p.ActorId).ToArray()));
             else StartTurns(selection, fight);
         }
     }
