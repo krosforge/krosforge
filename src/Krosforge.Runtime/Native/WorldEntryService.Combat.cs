@@ -35,12 +35,17 @@ internal sealed partial class WorldEntryService
     private long lastFight;
     private CombatEncounter[] AvailableEncounters(long map) => combat?.Encounters
         .Where(e => e.Map == map && !claimedGroups.ContainsKey(e.GroupId)).ToArray() ?? [];
+    private static BattleMap? NextBattle(Selection selection)
+    {
+        var map = selection.Map;
+        return map.Battles.IsEmpty ? null : map.Battles[selection.BattleIndices.GetValueOrDefault(map.Id)];
+    }
     internal void PreviewBattleMap(Selection selection)
     {
         lock (gate)
         {
             Require(selection);
-            if (selection.MapReady && selection.Fight is null && selection.Map.Battle is { } battle)
+            if (selection.MapReady && selection.Fight is null && NextBattle(selection) is { } battle)
                 selection.Emit(new BattleMapPreview(selection.Location.MapId, battle));
         }
     }
@@ -80,7 +85,8 @@ internal sealed partial class WorldEntryService
         {
             Attack(selection, encounter.GroupId); return;
         }
-        var fight = new FightSession(checked(++lastFight), encounter, selection.Character.Id, selection.Character.Level);
+        var battle = NextBattle(selection) ?? throw new InvalidDataException("No battle map for the encounter.");
+        var fight = new FightSession(checked(++lastFight), encounter.OnBattle(battle), selection.Character.Id, selection.Character.Level);
         fight.DurableId = outcomes?.Begin(selection.Profile, ServerPresentation.RealmId, selection.Character.Id, encounter.GroupId, selection.Location);
         claimedGroups.Add(encounter.GroupId, selection);
         Broadcast(selection.Location.MapId, new EncounterDeparted(encounter.GroupId));
@@ -88,7 +94,7 @@ internal sealed partial class WorldEntryService
         selection.MapReady = false;
         selection.UnacknowledgedMotion = null;
         selection.Fight = fight;
-        selection.Emit(new FightEntered(fight.Id, encounter));
+        selection.Emit(new FightEntered(fight.Id, fight.Encounter));
     }
     private async Task WaitForAttack(Selection selection)
     {
@@ -149,11 +155,18 @@ internal sealed partial class WorldEntryService
             Require(selection);
             if (selection.Fight is null) return;
             if (outcomes is not null) { FinishCombat(selection, selection.Fight, true); return; }
-            ReleaseFight(selection);
-            selection.MapReady = false;
-            selection.MovementAvailableAt = EarliestPredictionStart();
-            selection.Emit(new FightLeft(selection.Location.MapId));
+            ReturnFromFight(selection);
         }
+    }
+    private void ReturnFromFight(Selection selection)
+    {
+        var map = selection.Map;
+        if (selection.Fight is { Started: true } && map.Battles.Length > 1)
+            selection.BattleIndices[map.Id] = (selection.BattleIndices.GetValueOrDefault(map.Id) + 1) % map.Battles.Length;
+        ReleaseFight(selection);
+        selection.MapReady = false;
+        selection.MovementAvailableAt = EarliestPredictionStart();
+        selection.Emit(new FightLeft(selection.Location.MapId));
     }
     private void ReleaseFight(Selection selection)
     {

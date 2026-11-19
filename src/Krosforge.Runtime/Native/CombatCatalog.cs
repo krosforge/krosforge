@@ -21,6 +21,19 @@ internal sealed record CombatEncounter(long Map, long GroupId, int GroupCell, in
     internal ImmutableArray<CombatOpponent> Companions { get; init; } = [];
     internal IEnumerable<CombatOpponent> Opponents => new[] { new CombatOpponent(-1, MonsterCell, Monster) }.Concat(Companions);
     internal CombatMonster MonsterFor(long actor) => Opponents.Single(opponent => opponent.Actor == actor).Monster;
+    internal CombatEncounter OnBattle(BattleMap battle)
+    {
+        if (battle == Battle) return this;
+        var red = battle.Board.Placements[1].Order().ToArray();
+        if (red.Length <= Companions.Length) throw new InvalidDataException("Not enough battle placement cells for the group.");
+        return this with
+        {
+            Battle = battle,
+            PlayerCell = battle.Board.Placements[0].Min(),
+            MonsterCell = red[0],
+            Companions = Companions.Select((other, index) => other with { Cell = red[index + 1] }).ToImmutableArray()
+        };
+    }
 }
 
 internal sealed class CombatCatalog
@@ -67,7 +80,7 @@ internal sealed class CombatCatalog
         Encounters = config.Encounters.Select(definition =>
         {
             var map = world.Map(definition.Map);
-            var battle = map.Battle ?? throw new InvalidDataException("Combat geometry missing.");
+            var battle = map.Battles.FirstOrDefault() ?? throw new InvalidDataException("Combat geometry missing.");
             return new CombatEncounter(map.Id, definition.GroupId, definition.GroupCell, definition.Direction, definition.AttackDistance,
                 definition.FightType, definition.PlayerCell, definition.MonsterCell,
                 ReadMonster(definition.MonsterId, definition.Grade), battle)
@@ -85,16 +98,21 @@ internal sealed class CombatCatalog
         if (Encounters.Select(e => e.GroupId).Distinct().Count() != Encounters.Count) throw new InvalidDataException("Duplicate encounter identity.");
         foreach (var e in Encounters)
         {
+            var map = world.Map(e.Map);
             if (e.GroupId >= -1 || e.Direction is < 0 or > 7 || e.AttackDistance is < 1 or > 560 || e.FightType is < 0 or > 10 ||
-                !world.Map(e.Map).WalkableCells.Contains(e.GroupCell) || e.Battle != world.Map(e.Map).Battle ||
+                !map.WalkableCells.Contains(e.GroupCell) || e.Battle != map.Battles.FirstOrDefault() ||
                 e.Companions.IsDefault || e.Companions.Length > 7 ||
                 e.Opponents.Select(m => m.Actor).Distinct().Count() != e.Companions.Length + 1 ||
                 e.Opponents.Any(m => m.Actor >= 0 || m.Monster.Definition <= 0 || m.Monster.Grade <= 0 ||
                     m.Monster.Level <= 0 || m.Monster.Life <= 0 || m.Monster.ActionPoints <= 0 || m.Monster.MovementPoints < 0) ||
                 e.Reward is null || e.Reward.Currency < 0 || !e.Reward.RestoreFullLife)
                 throw new InvalidDataException("Invalid encounter configuration.");
-            _ = new CombatPreparation(e.Board, new[] { new CombatPlacement(1, 0, e.PlayerCell, true) }
-                .Concat(e.Opponents.Select(m => new CombatPlacement(m.Actor, 1, m.Cell, false, true))));
+            foreach (var battle in map.Battles)
+            {
+                var placed = e.OnBattle(battle);
+                _ = new CombatPreparation(placed.Board, new[] { new CombatPlacement(1, 0, placed.PlayerCell, true) }
+                    .Concat(placed.Opponents.Select(m => new CombatPlacement(m.Actor, 1, m.Cell, false, true))));
+            }
         }
     }
     private static int Number(Dictionary<string, object> row, string key) => Convert.ToInt32(row[key], CultureInfo.InvariantCulture);

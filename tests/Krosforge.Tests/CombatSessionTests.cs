@@ -9,9 +9,42 @@ namespace Krosforge.Tests;
 public sealed partial class WorldSessionTests
 {
     private static WorldEntryCatalog CombatWorld() => new(new(100, 0, 3, 1), new(14, 560, 1000), [],
-        new EntryMap(100, 25, Enumerable.Range(0, 6).ToHashSet()) { Battle = new(200, 26, CombatPreparationTests.Board()) });
+        new EntryMap(100, 25, Enumerable.Range(0, 6).ToHashSet()) { Battles = [new(200, 26, CombatPreparationTests.Board())] });
     private static CombatCatalog Encounters(WorldEntryCatalog world, int groupCell = 5) => new(world,
-        new CombatEncounter(100, -30001, groupCell, 3, 2, 4, 2, 5, new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])), world.Map(100).Battle!));
+        new CombatEncounter(100, -30001, groupCell, 3, 2, 4, 2, 5, new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])), world.Map(100).Battles[0]));
+    [Fact]
+    public void BattleRotationKeepsThePreviewUntilTheFightEndsAndVariesPlacementsPerCharacter()
+    {
+        BattleMap first = new(200, 26, CombatPreparationTests.Board());
+        BattleMap second = new(201, 26, CombatPreparationTests.Board());
+        BattleMap third = new(200, 26, new(14, Enumerable.Range(0, 6)
+            .Select(id => new CombatCell(id, true, true, 0, 1, id < 3 ? 1 : 0))));
+        var world = new WorldEntryCatalog(new(100, 0, 3, 1),
+            new EntryMap(100, 25, Enumerable.Range(0, 6).ToHashSet()) { Battles = [first, second, third] });
+        using var fixture = new MovementFixture(catalog: world, combat: catalog => Encounters(catalog, 1));
+        var (alpha, notices) = fixture.Join("Alpha");
+        var (beta, betaNotices) = fixture.Join("Beta");
+        foreach (var expected in new[] { first, first, second, third, first }.Select((map, index) => (map, index)))
+        {
+            fixture.Service.PreviewBattleMap(alpha);
+            fixture.Service.PreviewBattleMap(alpha);
+            var previews = notices.OfType<BattleMapPreview>().TakeLast(2).ToArray();
+            Assert.Equal(2, previews.Length);
+            Assert.All(previews, preview => Assert.Same(expected.map, preview.Battle));
+            fixture.Service.PreviewBattleMap(beta);
+            Assert.Same(first, betaNotices.OfType<BattleMapPreview>().Last().Battle);
+            fixture.Service.Attack(alpha, -30001);
+            Assert.Same(expected.map, notices.OfType<FightEntered>().Last().Encounter.Battle);
+            fixture.Service.Join(alpha, expected.map.Id);
+            var loaded = notices.OfType<FightLoaded>().Last().View;
+            Assert.Same(expected.map, loaded.Encounter.Battle);
+            Assert.All(loaded.Positions, position =>
+                Assert.Contains(position.Cell, (IReadOnlySet<int>)expected.map.Board.Placements[position.Team]));
+            if (expected.index != 0) fixture.Service.Ready(alpha, true);
+            fixture.Service.Forfeit(alpha);
+            fixture.Service.Join(alpha, 100);
+        }
+    }
     [Fact]
     public void AttackApproachesBeforeEnteringAndForfeitRestoresTheConfirmedPosition()
     {
@@ -58,7 +91,7 @@ public sealed partial class WorldSessionTests
     public void AnApproachAlreadyCoveredByPredictionTimeStillEntersTheFight()
     {
         var world = new WorldEntryCatalog(new(100, 0, 3, 1), new MovementPolicy(14, 560, 50) { PredictionLeadMilliseconds = 50 }, [],
-            new EntryMap(100, 25, Enumerable.Range(0, 6).ToHashSet()) { Battle = new(200, 26, CombatPreparationTests.Board()) });
+            new EntryMap(100, 25, Enumerable.Range(0, 6).ToHashSet()) { Battles = [new(200, 26, CombatPreparationTests.Board())] });
         using var f = new MovementFixture(catalog: world, combat: catalog => Encounters(catalog, 2));
         var (a, _) = f.Join("Alpha"); f.Service.Attack(a, -30001);
         Assert.NotNull(a.Fight); Assert.Equal(1, a.Location.CellId); Assert.Null(a.PendingAttack);
@@ -81,7 +114,7 @@ public sealed partial class WorldSessionTests
     public async Task AttackWaitsForCarriedTravelTimeAndDisconnectCancelsThatWait(bool disconnect)
     {
         var world = new WorldEntryCatalog(new(100, 0, 3, 1), new MovementPolicy(14, 560, 100) { CancellationLeadSteps = 1 }, [],
-            new EntryMap(100, 25, Enumerable.Range(0, 6).ToHashSet()) { Battle = new(200, 26, CombatPreparationTests.Board()) });
+            new EntryMap(100, 25, Enumerable.Range(0, 6).ToHashSet()) { Battles = [new(200, 26, CombatPreparationTests.Board())] });
         using var f = new MovementFixture(catalog: world, combat: catalog => Encounters(catalog, 1));
         var (a, _) = f.Join("Alpha");
         f.Service.Move(a, new(100, [0,3], 0)); f.Clock.Advance(TimeSpan.FromMilliseconds(60)); f.Service.Cancel(a, 1);

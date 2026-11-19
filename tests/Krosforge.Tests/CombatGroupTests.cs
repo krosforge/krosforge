@@ -9,12 +9,12 @@ public sealed partial class WorldSessionTests
     private static WorldEntryCatalog GroupWorld() => new(new(100, 0, 3, 1), new(14, 560, 50), [],
         new EntryMap(100, 25, Enumerable.Range(0, 560).ToHashSet())
         {
-            Battle = new(200, 26, new(14, Enumerable.Range(0, 560).Select(id =>
-                new CombatCell(id, true, true, 0, 1, id == 100 ? 0 : id is 128 or 129 ? 1 : null))))
+            Battles = [new(200, 26, new(14, Enumerable.Range(0, 560).Select(id =>
+                new CombatCell(id, true, true, 0, 1, id == 100 ? 0 : id is 128 or 129 ? 1 : null))))]
         });
     private static CombatCatalog GroupEncounter(WorldEntryCatalog world)
     {
-        var battle = world.Map(100).Battle!;
+        var battle = world.Map(100).Battles[0];
         return new(world, new CombatEncounter(100, -30001, 1, 3, 2, 4, 100, 128,
             new(7, 1, 1, 15, 2, 3, new(9, [], [], [100])) { Experience = 50, Spells = [2] }, battle)
         {
