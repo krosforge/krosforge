@@ -1,17 +1,17 @@
-## Resumo
+## Summary
 
-<!-- Descreva em português o problema e o que mudou. -->
+<!-- Describe the problem and what changed in English. -->
 
-## Como testar
+## How to test
 
-<!-- Informe os passos para reproduzir ou verificar a mudança. -->
+<!-- List the steps to reproduce the issue or verify the change. -->
 
-## Validação
+## Verification
 
-<!-- Registre os testes executados, seus resultados e eventuais limitações. -->
+<!-- Record the tests you ran, their results, and any limitations. -->
 
-## Notas da versão
+## Release notes
 
-<!-- Informe a versão de destino e adicione o link para release-notes/<versão>.md. -->
+<!-- State the target version and link to release-notes/<version>.md. -->
 
-- [ ] Criei ou atualizei as notas da versão de destino em português.
+- [ ] I created or updated the target release notes in English.
