@@ -6,9 +6,10 @@ internal sealed record CombatView(long Id, EntryMap Map, CombatEncounter Encount
 
 internal sealed partial class WorldEntryService
 {
-    internal sealed class FightSession(long id, CombatEncounter encounter, long player)
+    internal sealed class FightSession(long id, CombatEncounter encounter, long player, int initialLevel)
     {
         internal long Id { get; } = id;
+        internal int InitialLevel { get; } = initialLevel;
         internal CombatEncounter Encounter { get; } = encounter;
         internal CombatPreparation Preparation { get; } = new(encounter.Board,
             new[] { new CombatPlacement(player, 0, encounter.PlayerCell, true) }
@@ -70,7 +71,7 @@ internal sealed partial class WorldEntryService
         {
             Attack(selection, encounter.GroupId); return;
         }
-        var fight = new FightSession(checked(++lastFight), encounter, selection.Character.Id);
+        var fight = new FightSession(checked(++lastFight), encounter, selection.Character.Id, selection.Character.Level);
         fight.DurableId = outcomes?.Begin(selection.Profile, ServerPresentation.RealmId, selection.Character.Id, encounter.GroupId, selection.Location);
         claimedGroups.Add(encounter.GroupId, selection);
         Broadcast(selection.Location.MapId, new EncounterDeparted(encounter.GroupId));

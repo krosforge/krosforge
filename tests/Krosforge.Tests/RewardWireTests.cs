@@ -9,6 +9,24 @@ namespace Krosforge.Tests;
 public sealed class RewardWireTests
 {
     private static ProtoObject Read(byte[] bytes) => ProtoObject.Read(bytes, 4096);
+    [Theory]
+    [InlineData(1, 2)]
+    [InlineData(2, 5)]
+    [InlineData(2, 2)]
+    public void LevelNotificationPrecedesResultOnlyWhenLevelIncreases(int previous, int current)
+    {
+        CharacterWire character = new(1, "Hero", 1, 0, 1, 1, current, new(1, [], [], [100]));
+        var result = new FightCompleted(character, new(100, 6, 3, 650), [],
+            new(Guid.NewGuid(), "victory", 0, 0, 1000), new()) { PreviousLevel = previous };
+        var events = CombatWire.Events(result).Select(frame => Read(Read(Read(frame).Bytes(3)).Bytes(1))).ToArray();
+        if (current > previous)
+        {
+            Assert.Equal("type.ankama.com/kqp", events[0].Text(1));
+            Assert.Equal((ulong)current, Read(events[0].Bytes(2)).UInt64(1));
+            Assert.Equal("type.ankama.com/jwp", events[1].Text(1));
+        }
+        else Assert.DoesNotContain(events, any => any.Text(1) == "type.ankama.com/kqp");
+    }
     [Fact]
     public void MapSnapshotPublishesConfiguredExperienceAndDropPercentagesWithoutRounding()
     {

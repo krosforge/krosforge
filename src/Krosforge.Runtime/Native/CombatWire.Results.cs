@@ -13,7 +13,9 @@ internal static partial class CombatWire
             B(2, J(N(2, f.Alive ? 1 : 0), N(5, f.Id), f.Level is { } level ? B(3, J(N(2, level), f.Id == result.Character.Id ? experience : [])) : [])),
             f.Id == result.Character.Id ? B(3, J(N(2, result.Receipt.Reward),
                 result.Receipt.Award.Items.Length > 0 ? InventoryWire.Prize(result.Receipt.Award.Items) : [])) : []))).ToArray();
-        return [E("jwp", J(team, J(fighters), N(8, result.Receipt.DurationMilliseconds))),
+        byte[][] levelUp = result.PreviousLevel is { } previous && result.Character.Level > previous
+            ? [E("kqp", N(1, result.Character.Level))] : [];
+        return [.. levelUp, E("jwp", J(team, J(fighters), N(8, result.Receipt.DurationMilliseconds))),
             E("jwh", B(2, J(N(2, checked((int)result.Summary.HealingDone)), N(3, checked((int)result.Summary.HealingReceived)), N(4, checked((int)result.Summary.DamageDealt)),
                 N(5, checked((int)result.Summary.DamageTaken)), N(7, result.Summary.EnemiesDefeated)))),
             E("irl", InventoryWire.Snapshot(result.Receipt.Balance, result.Receipt.State.Items)),

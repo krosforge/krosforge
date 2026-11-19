@@ -3,7 +3,10 @@ namespace Krosforge.Runtime.Native;
 
 internal sealed record FightResultFighter(long Id, bool Alive, bool Won, int? Level);
 internal sealed record FightCompleted(CharacterWire Character, EntryAttributes Attributes, IReadOnlyList<FightResultFighter> Fighters,
-    CombatReceipt Receipt, CombatSummary Summary) : WorldNotice;
+    CombatReceipt Receipt, CombatSummary Summary) : WorldNotice
+{
+    internal int? PreviousLevel { get; init; }
+}
 
 internal sealed partial class WorldEntryService
 {
@@ -33,7 +36,7 @@ internal sealed partial class WorldEntryService
             fight.Turns?.Fighters.Single(f => f.Id == p.ActorId).Alive ?? true,
             p.Controlled == won, p.Controlled ? selection.Character.Level : null)).ToArray();
         selection.Emit(new FightCompleted(selection.Character, selection.Attributes, fighters, fight.Receipt,
-            fight.Turns?.Summary(selection.Character.Id) ?? new()));
+            fight.Turns?.Summary(selection.Character.Id) ?? new()) { PreviousLevel = fight.InitialLevel });
         ReleaseFight(selection);
         selection.MapReady = false;
         selection.MovementAvailableAt = EarliestPredictionStart();

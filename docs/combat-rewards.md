@@ -12,6 +12,8 @@ The single-player encounter calculation is integrated with the result transactio
 
 The prospecting coefficient follows the pinned nonlinear formula. A configured drop multiplier scales the resulting probability, capped at 100 percent; it does not multiply a successful stack quantity. Zero disables a roll. Item effects are resolved through the installation's managed-reference registry, rather than interpreting a reference identity as an effect. Probability tests and catalog-reading tests do not establish the eligibility or frequency of generated encounter loot.
 
+An increase in level also publishes the native level notification before the combat result. The previous level is captured when entering the encounter, before the durable award changes the selected character. This updates the live character model rather than relying on reconnect. Same-build `esf.zbb` at `0x181896bb0` consumes field 1 of `kqp` and invokes the level-state update and level-up publisher at `0x1818a5ed0`. Unchanged levels do not publish this notification, and duplicate combat acknowledgements do not repeat it.
+
 ## Loot eligibility and item generation
 
 The runtime reads regular drops by monster grade and global drop conditions from the pinned monster bundle. Item effects and their fixed/random parameter policy come from the pinned item and effect bundles. Numeric references are resolved before rolling; variable equipment bonuses are rolled while fixed dice effects retain their ranges. One eligible successful roll adds one item for the controlled participant, subject to the source maximum. A catalog count such as 63 is not interpreted as a 63-item stack.

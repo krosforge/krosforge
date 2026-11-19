@@ -48,6 +48,7 @@ public sealed partial class WorldSessionTests
             if (!loseFinalAck)
             {
                 await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, sequence), WorldProtocol.Number(3, 1)), token);
+                Assert.Equal(2UL, (await Event(world, "kqp", token)).UInt64(1));
                 var result = await Event(world, "jwp", token);
                 var player = result.Repeated(4).Select(v => ProtoObject.Read(v.Bytes, 4096))
                     .Single(v => ProtoObject.Read(v.Bytes(2), 4096).UInt64(5) == (ulong)id);
