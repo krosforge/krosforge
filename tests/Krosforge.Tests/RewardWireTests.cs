@@ -9,6 +9,19 @@ namespace Krosforge.Tests;
 public sealed class RewardWireTests
 {
     private static ProtoObject Read(byte[] bytes) => ProtoObject.Read(bytes, 4096);
+    [Fact]
+    public void SpellBarAssignmentAndSnapshotUseTheNativeSpellVariant()
+    {
+        var request = Read(Convert.FromHexString("080112071203089A681801"));
+        Assert.True(SpellShortcutWire.IsSpellBar(request));
+        var shortcut = SpellShortcutWire.ReadAssignment(request);
+        Assert.Equal(new SpellShortcut(1, 13338), shortcut);
+        var snapshot = Read(SpellShortcutWire.Snapshot([shortcut]));
+        Assert.Equal(1UL, snapshot.UInt64(2));
+        var entry = Read(Assert.Single(snapshot.Repeated(1)).Bytes);
+        Assert.Equal(1UL, entry.UInt64(3));
+        Assert.Equal(13338UL, Read(entry.Bytes(2)).UInt64(1));
+    }
     [Theory]
     [InlineData(2)]
     [InlineData(5)]

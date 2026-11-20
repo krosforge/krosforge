@@ -136,7 +136,8 @@ internal sealed class ClientLaunchManager(string dataRoot) : IDisposable
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("ErrorCopyInvalid");
             using var file = File.OpenRead(path);
             var actualHash = Convert.ToHexStringLower(SHA256.HashData(file));
-            if (actualHash != hash && (relative != "GameAssembly.dll" || actualHash != CharacterNavigation.PatchedHash))
+            if (actualHash != hash && (relative != "GameAssembly.dll" ||
+                actualHash is not (CharacterNavigation.NavigationOnlyHash or CharacterNavigation.PatchedHash)))
                 throw new IOException("ErrorCopyInvalid");
         }
         var info = File.ReadAllLines(Path.Combine(target, "Dofus_Data", "app.info"));

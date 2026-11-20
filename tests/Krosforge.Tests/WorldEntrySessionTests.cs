@@ -15,6 +15,70 @@ public sealed partial class WorldSessionTests
             new(1, ClientInstallation.SupportedBuild, 1, 0, 1, 1, [1, 2, 3, 4, 5, 6]), out var id));
         return id;
     }
+    [Fact]
+    public async Task SpellBarEditsRestoreTheCharacterLayoutOnReconnect()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spell-bar-tcp-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var profiles = new ProfileStore(root);
+            var profile = profiles.Create("Alpha");
+            var store = new CharacterStore(root);
+            var id = CreateCharacter(store, profile.Id, "Hero");
+            var characters = new CharacterService(store, SyntheticCatalog());
+            var spells = new CombatSpellCatalog([], roleplay: new Dictionary<int, System.Collections.Immutable.ImmutableArray<RoleplaySpell>>
+            {
+                [1] = [new(13338, 1, 1), new(42, 1, 1), new(43, 1, 2)]
+            });
+            var service = new WorldEntryService(characters, new LocationStore(root), EntryCatalog(), spells: spells, outcomes: new(root));
+            await using var host = new LocalSessionHost(characters: characters, worldEntry: service);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            var token = timeout.Token;
+            var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var session = host.Register(profile, "pt", phase => { if (phase == "disconnected") disconnected.TrySetResult(); });
+
+            async Task<TcpClient> Connect()
+            {
+                using var login = new TcpClient();
+                await Login(host, login, session.IssueTicket(), token);
+                var world = await Enter(host, login, token, emptyRoster: false);
+                await Send(world, "kta", WorldProtocol.Number(1, (ulong)id), token);
+                Assert.True((await Event(world, "ksb", token)).Has(1));
+                await Send(world, "kkc", [], token);
+                foreach (var type in new[] { "kjp", "jow", "irl", "ith", "krg" }) await Event(world, type, token);
+                await AssertMap(world, id, profile.Slot, token);
+                Assert.Equal(2, (await Event(world, "hkh", token)).Repeated(1).Count());
+                return world;
+            }
+            async Task AssertBar(TcpClient world, params (ulong Slot, ulong Spell)[] expected)
+            {
+                var bar = await Event(world, "ism", token);
+                Assert.Equal(1UL, bar.UInt64(2));
+                var entries = bar.Repeated(1).Select(field => ProtoObject.Read(field.Bytes, 8));
+                Assert.Equal(expected, entries.Select(entry => (entry.UInt64(3, false), ProtoObject.Read(entry.Bytes(2), 8).UInt64(1))));
+            }
+
+            using (var world = await Connect())
+            {
+                await AssertBar(world);
+                await Send(world, "iqk", Convert.FromHexString("080112071203089A681801"), token);
+                await AssertBar(world, (1, 13338));
+                await Send(world, "iqk", Convert.FromHexString("080112061202082A1802"), token);
+                await AssertBar(world, (1, 13338), (2, 42));
+                await Send(world, "iqk", Convert.FromHexString("080112061202082B1803"), token);
+                await AssertBar(world, (1, 13338), (2, 42)); // Level-locked spell.
+                await Send(world, "itg", Convert.FromHexString("080110021801"), token);
+                await AssertBar(world, (1, 42), (2, 13338));
+                await Send(world, "iqr", Convert.FromHexString("08011001"), token);
+                await AssertBar(world, (2, 13338));
+            }
+            await disconnected.Task.WaitAsync(token);
+            using var reentered = await Connect();
+            await AssertBar(reentered, (2, 13338));
+        }
+        finally { Directory.Delete(root, true); }
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

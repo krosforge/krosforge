@@ -2,7 +2,10 @@ using Krosforge.Core;
 namespace Krosforge.Runtime.Native;
 
 internal sealed record CombatView(long Id, CombatEncounter Encounter, CharacterWire Character,
-    EntryAttributes Attributes, IReadOnlyList<CombatPlacement> Positions, IReadOnlyList<CombatSpell>? Spells = null);
+    EntryAttributes Attributes, IReadOnlyList<CombatPlacement> Positions, IReadOnlyList<CombatSpell>? Spells = null)
+{
+    internal IReadOnlyList<SpellShortcut>? Shortcuts { get; init; }
+}
 
 internal sealed partial class WorldEntryService
 {
@@ -121,7 +124,8 @@ internal sealed partial class WorldEntryService
     {
         var fight = selection.Fight!;
         if (map != fight.Encounter.Battle.Id || fight.Started) throw new InvalidDataException("Fight map load does not match preparation.");
-        selection.Emit(new FightLoaded(new(fight.Id, fight.Encounter, selection.Character, selection.Attributes, fight.Preparation.Fighters, spells?.Player(selection.Character.BreedId))));
+        selection.Emit(new FightLoaded(new(fight.Id, fight.Encounter, selection.Character, selection.Attributes, fight.Preparation.Fighters, spells?.Player(selection.Character.BreedId))
+            { Shortcuts = selection.Rewards.SpellBar }));
         fight.Loaded = true;
     }
     internal void Place(Selection selection, long actor, int cell)
@@ -165,6 +169,7 @@ internal sealed partial class WorldEntryService
             selection.BattleIndices[map.Id] = (selection.BattleIndices.GetValueOrDefault(map.Id) + 1) % map.Battles.Length;
         ReleaseFight(selection);
         selection.MapReady = false;
+        selection.SpellBookPublished = false;
         selection.MovementAvailableAt = EarliestPredictionStart();
         selection.Emit(new FightLeft(selection.Location.MapId));
     }

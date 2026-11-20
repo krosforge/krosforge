@@ -20,10 +20,16 @@ internal static partial class CombatWire
             throw new ProtocolException("Invalid combat animation acknowledgement.");
         return (int)sequence;
     }
-    private static byte[] Book(CombatView view) => J(
-        (view.Spells ?? []).Select((spell, slot) => B(2, J(N(3, slot), B(2, N(1, spell.Id)))))
-        .Concat((view.Spells ?? []).Select(spell => B(5, J(N(1, 0), N(2, spell.Id), N(4, spell.Grade)))))
-        .Append(N(6, view.Character.Id)).ToArray());
+    private static byte[] Book(CombatView view)
+    {
+        var spells = view.Spells ?? [];
+        var shortcuts = view.Shortcuts is { } saved
+            ? saved.Where(row => spells.Any(spell => spell.Id == row.Spell))
+            : spells.Select((spell, slot) => new SpellShortcut(slot, spell.Id));
+        return J(shortcuts.Select(row => B(2, SpellShortcutWire.Encode(row)))
+            .Concat(spells.Select(spell => B(5, J(N(1, 0), N(2, spell.Id), N(4, spell.Grade)))))
+            .Append(N(6, view.Character.Id)).ToArray());
+    }
     private static byte[] Simple(int id, int value) => J(N(2, id), B(3, N(2, value)));
     private static byte[] Usable(int id, int basis, int current, int used = 0) =>
         J(N(2, id), B(1, J(N(4, basis), N(6, current - basis), N(7, used))));

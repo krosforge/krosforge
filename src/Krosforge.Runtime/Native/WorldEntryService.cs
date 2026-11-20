@@ -112,7 +112,10 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             {
                 selection.SpellBookPublished = true;
                 if (spells?.RoleplaySpells(selection.Character.BreedId, selection.Character.Level) is { Length: > 0 } book)
+                {
                     selection.Emit(new RoleplaySpellBook(book));
+                    selection.Emit(new SpellBarSnapshot(SpellBar(selection)));
+                }
             }
             foreach (var other in visible)
                 if (other.Moving is { Announced: true } motion)

@@ -10,6 +10,7 @@ internal sealed record CombatAward(long Experience, ItemAward[] Items);
 internal sealed record CharacterRewards(long Experience, InventoryItem[] Items)
 {
     internal CharacteristicPoints Allocation { get; init; } = CharacteristicPoints.Empty;
+    internal SpellShortcut[]? SpellBar { get; init; }
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 internal sealed record InventoryEffect(int Action, int Minimum, int Maximum, int Constant);
@@ -56,12 +57,15 @@ internal sealed partial class CombatOutcomeStore
         using (var rows = c.ExecuteReader())
             while (rows.Read()) items.Add(new(rows.GetInt64(0), rows.GetInt32(1), rows.GetInt32(2), rows.GetString(3)));
         c.CommandText = "SELECT vitality,chance,agility,intelligence,strength,wisdom FROM character_allocations WHERE character_id=$character";
-        using var allocation = c.ExecuteReader();
+        CharacteristicPoints allocation;
+        using (var row = c.ExecuteReader())
+            allocation = row.Read()
+                ? new(row.GetInt32(0), row.GetInt32(1), row.GetInt32(2), row.GetInt32(3), row.GetInt32(4), row.GetInt32(5))
+                : CharacteristicPoints.Empty;
         return new(experience, items.ToArray())
         {
-            Allocation = allocation.Read()
-                ? new(allocation.GetInt32(0), allocation.GetInt32(1), allocation.GetInt32(2), allocation.GetInt32(3), allocation.GetInt32(4), allocation.GetInt32(5))
-                : CharacteristicPoints.Empty
+            Allocation = allocation,
+            SpellBar = ReadSpellBar(c)
         };
     }
     internal CharacterRewards Redistribute(Guid profile, int realm, long character, ExperienceCurve curve, CharacteristicPoints points)

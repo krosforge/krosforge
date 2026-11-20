@@ -3,7 +3,7 @@ namespace Krosforge.Runtime;
 
 internal static class DatabaseSchema
 {
-    internal const int Current = 5;
+    internal const int Current = 6;
 
     internal static void Initialize(SqliteConnection db, string directory, Action? beforeCommit = null)
     {
@@ -70,7 +70,7 @@ internal static class DatabaseSchema
                 items TEXT NOT NULL);
             PRAGMA user_version=4;
             """, transaction);
-        Execute(db, """
+        if (version < 5) Execute(db, """
             CREATE TABLE character_allocations(
                 character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
                 vitality INTEGER NOT NULL CHECK(vitality BETWEEN 0 AND 32767),
@@ -80,6 +80,12 @@ internal static class DatabaseSchema
                 strength INTEGER NOT NULL CHECK(strength BETWEEN 0 AND 32767),
                 wisdom INTEGER NOT NULL CHECK(wisdom BETWEEN 0 AND 32767));
             PRAGMA user_version=5;
+            """, transaction);
+        Execute(db, """
+            CREATE TABLE character_spell_bars(
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                layout TEXT NOT NULL);
+            PRAGMA user_version=6;
             """, transaction);
         beforeCommit?.Invoke();
         transaction.Commit();

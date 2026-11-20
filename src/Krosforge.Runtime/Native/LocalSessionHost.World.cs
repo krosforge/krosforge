@@ -149,6 +149,16 @@ internal sealed partial class LocalSessionHost
                         case "krc" when selected is not null:
                             worldEntry!.Redistribute(selected, WorldEntryWire.ReadAllocation(request.Payload));
                             continue;
+                        case "iqk" when selected is not null && SpellShortcutWire.IsSpellBar(body):
+                            worldEntry!.AssignSpell(selected, SpellShortcutWire.ReadAssignment(body));
+                            continue;
+                        case "iqr" when selected is not null && SpellShortcutWire.IsSpellBar(body):
+                            worldEntry!.RemoveSpell(selected, SpellShortcutWire.ReadRemoval(body));
+                            continue;
+                        case "itg" when selected is not null && SpellShortcutWire.IsSpellBar(body):
+                            var slots = SpellShortcutWire.ReadMove(body);
+                            worldEntry!.MoveSpell(selected, slots.Source, slots.Destination);
+                            continue;
                         case "jsr" when selected is not null:
                             var cast = CombatWire.CastRequest(request.Payload);
                             worldEntry!.Cast(selected, cast.Spell, cast.Cell); continue;

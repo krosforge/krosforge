@@ -68,11 +68,11 @@ Creation reads the hash-pinned breed, head and body bundles locally from the sha
 
 Automated catalog verification can be enabled with `KROSFORGE_TEST_CLIENT` pointing to a separate reference installation. That test is skipped in CI, which does not receive game assets. Automated TCP and SQLite tests use synthetic appearance data. Native screen acceptance, including all five languages and the behavior after creation, must be recorded separately in the pull request.
 
-## Character navigation compatibility
+## Native interface compatibility
 
 The creation response places the newly committed character first because the native creation consumer selects the first roster entry. Ordinary list requests keep their stable order. Creation success and world selection remain distinct operations; a refused selection never rolls back character creation.
 
-In reference build `3.7.14.18`, the rejection handler clears the cached roster, the back action omits it from the display event, and automatic-selection paths interfere with returning to the list. The managed copy receives four bounded compatibility changes before the first native process starts:
+In reference build `3.7.14.18`, the rejection handler clears the cached roster, the back action omits it from the display event, and automatic-selection paths interfere with returning to the list. The managed copy receives these bounded compatibility changes before the first native process starts:
 
 | Consumer | Native RVA / file offset | Change |
 | --- | --- | --- |
@@ -80,9 +80,11 @@ In reference build `3.7.14.18`, the rejection handler clears the cached roster, 
 | Character-list display | `0x1f04fc7` / `32519623` | A forced return displays the roster; normal creation retains its automatic selection path. |
 | Roster after server handoff | `0x183ff93` / `25421203` | Skip the remembered-character candidate; show the roster for manual selection. The separate newly-created-character selection path is retained. |
 | Back from creation | `0x176f7b0`, `0x176f80b` / `24567216`, `24567307` | Preserve the cached roster in a saved register and pass it to the display event instead of null, allowing the first-ever list screen to initialize. |
+| Automatic feature notice catalog | `0x1ef4180` / `32450432` | Skip automatic feature notices in local sessions so they cannot cover the level-up dialog. Individually opened notices and the level-up presenter use separate paths. |
+| Open character sheet on ordinary realms | `0x2d8c81c` / `47754780` | When the seasonal XP tooltip is unavailable, continue to the shared attribute renderers. This refreshes the open sheet after a point distribution. |
 
 These locations were derived from the pinned native consumers and exercised in an isolated Portuguese client. They are compatibility instructions, not game content. Server handoff always opens the roster for manual selection. The first change preserves the original failure dialog; no world-entry success is fabricated. After dismissing a refusal during creation, the back arrow returns to the roster in the same window.
 
-`CharacterNavigation` accepts only the complete original assembly hash or the complete expected patched hash (`e51305f154af33fe0fb71584f105847b9e90ff88f074232eace4323d3f2ae7d4`). It checks each original instruction range and the resulting digest, writes a separate temporary file, flushes it, and atomically promotes it. Cancellation or promotion failure leaves the previous assembly intact. A terminated process may leave an unreferenced temporary file; it is never treated as a valid prepared assembly. A retry derives the change from the unchanged original. Unknown or partially modified assemblies fail validation. Additional profiles reuse the verified shared assembly.
+`CharacterNavigation` accepts the complete original assembly and the two recognized prepared revisions. It can add the presentation changes to a copy that already contains the character navigation changes. It checks each expected instruction range and the resulting digest, writes a separate temporary file, flushes it, and atomically promotes it. Cancellation or promotion failure leaves the previous assembly intact. Unknown or partially modified assemblies fail validation. Additional profiles reuse the verified shared assembly.
 
 Only the managed copy changes. No native binaries or extracted assets are shipped. Existing prepared copies are updated without copying the whole installation again. Older launchers do not recognize the patched digest; to use an older launcher, close all native windows and prepare a fresh managed copy while preserving the database. Native acceptance and Windows locked-file recovery remain separate from the synthetic Linux tests.

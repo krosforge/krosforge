@@ -81,6 +81,7 @@ internal static class WorldEntryWire
         CharacterStats changed => [WorldProtocol.Event("krg", Statistics(changed.Attributes, changed.Level))],
         CharacterLeveled raised => [WorldProtocol.Event("kqp", N(1, raised.Level)), WorldProtocol.Event("krg", Statistics(raised.Attributes, raised.Level))],
         RoleplaySpellBook book => [WorldProtocol.Event("hkh", J(book.Spells.Select(spell => B(1, J(N(2, spell.Id), N(4, spell.Grade)))).ToArray()))],
+        SpellBarSnapshot bar => [WorldProtocol.Event("ism", SpellShortcutWire.Snapshot(bar.Shortcuts))],
         MovementReleased => [WorldProtocol.Event("jpk", [])],
         MapLoading loading => [WorldProtocol.Event("jow", LoadMap(loading.Map))],
         _ => CombatWire.Events(notice)

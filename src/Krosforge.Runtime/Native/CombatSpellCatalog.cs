@@ -15,7 +15,7 @@ internal sealed class CombatSpellCatalog
     internal CombatTiming Timing { get; } = new();
     private readonly ImmutableArray<CombatSpell> common;
     private readonly Dictionary<int, ImmutableArray<CombatSpell>> players;
-    private readonly Dictionary<int, ImmutableArray<RoleplaySpell>> roleplay = [];
+    private readonly Dictionary<int, ImmutableArray<RoleplaySpell>> roleplay;
     private readonly Dictionary<(int Id, int Grade), CombatSpell> monsters;
     internal CombatSpellCatalog(string root, IEnumerable<int>? monsterSpells = null)
     {
@@ -72,10 +72,12 @@ internal sealed class CombatSpellCatalog
         .Where(spell => spell.MinimumLevel <= level).GroupBy(spell => spell.Id)
         .Select(grades => grades.MaxBy(spell => spell.Grade)!).ToArray();
     internal CombatSpellCatalog(IEnumerable<CombatSpell> common, IReadOnlyDictionary<int, ImmutableArray<CombatSpell>>? players = null,
-        IReadOnlyDictionary<int, ImmutableArray<CombatSpell>>? monsters = null)
+        IReadOnlyDictionary<int, ImmutableArray<CombatSpell>>? monsters = null,
+        IReadOnlyDictionary<int, ImmutableArray<RoleplaySpell>>? roleplay = null)
     {
         this.common = common.ToImmutableArray(); this.players = players?.ToDictionary() ?? [];
         this.monsters = monsters?.Values.SelectMany(book => book).ToDictionary(spell => (spell.Id, spell.Grade)) ?? [];
+        this.roleplay = roleplay?.ToDictionary() ?? [];
     }
     internal ImmutableArray<CombatSpell> Player(int breed) => common.AddRange(players.GetValueOrDefault(breed, []));
     internal ImmutableArray<CombatSpell> Monster(IEnumerable<int> spells, IReadOnlyDictionary<int, int>? grades = null) => spells.Select(id =>
