@@ -16,6 +16,8 @@ Before migrating an older supported schema, an immediate SQLite transaction excl
 
 Each level gained grants five characteristic points and five maximum life. The runtime derives the total budget from durable XP and stores the costs assigned to the six attributes. An ordinary `krc` request replaces the entire distribution, so retrying it yields the same state. The runtime verifies the selected character and current level in the write transaction and sends the authoritative statistics to the client. Omitted costs free those points for reuse.
 
+Character initiative is the sum of effective Strength, Intelligence, Chance and Agility after converting the spent points into attribute values. The same statistic is sent to the character sheet and used to determine turn order when the next fight starts.
+
 The exploration spell bar is saved per character. The build's `iqk`, `itg`, and `iqr` requests assign, move, and remove spell shortcuts. Assigning an existing shortcut moves it to the new slot, and moving between two occupied slots swaps them. The runtime verifies spell availability against the installed catalog and returns the complete `ism` layout after each edit. Reconnection restores that layout, including an intentionally empty bar. Combat reuses the saved slots for spells the local combat engine supports.
 
 The `hkh` base book contains available class and common spells at their installed grades. Combat loads its own executable spell set with `juf`. After a victory raises the level, the runtime returns the character to the exploration scene, then sends `kqp`, the updated statistics and the refreshed spell book. A reconnect restores the level and points from the committed award.

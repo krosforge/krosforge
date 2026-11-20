@@ -15,6 +15,15 @@ public sealed class CombatTurnsTests
     private static CombatFighter Enemy(int cell = 156, int life = 100) =>
         new(-1, 1, false, cell, life, life, 2, 2, 3, 3, CombatStatistics.Empty, []);
     [Fact]
+    public void InitiativeUsesEffectiveElementalAttributesAtHigherPointCosts()
+    {
+        var points = new CharacteristicPoints(Vitality: 6, Chance: 102, Agility: 1, Intelligence: 2, Strength: 3, Wisdom: 3);
+        Assert.True(points.Fits(25));
+        var stats = points.Statistics;
+        Assert.Equal(101, stats.Chance);
+        Assert.Equal(107, stats.Initiative);
+    }
+    [Fact]
     public void InitiativeTurnSerialAndRefreshAreAuthoritative()
     {
         var battle = new CombatTurns(Board(), [Player(), Enemy() with { Statistics = CombatStatistics.Empty with { Initiative = 1 } }]);

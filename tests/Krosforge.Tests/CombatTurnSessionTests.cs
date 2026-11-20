@@ -158,6 +158,40 @@ public sealed partial class WorldSessionTests
         Assert.NotNull(selection.Fight!.Turns);
     }
     [Fact]
+    public void AllocatingAndResettingPointsChangesInitiativeInTheNextFight()
+    {
+        using var fixture = new MovementFixture(deferTimers: true, catalog: TurnWorld(), combat: world =>
+        {
+            var encounter = TurnEncounter(world).Encounters.Single();
+            var monster = encounter.Monster with { Statistics = CombatStatistics.Empty with { Initiative = 1 } };
+            return new CombatCatalog(world, encounter with { Monster = monster });
+        }, spells: TurnSpells(), outcomes: true);
+        var profile = fixture.Profiles.Create("Alpha");
+        var id = CreateCharacter(fixture.Characters, profile.Id, "Hero");
+        var location = fixture.Locations.LoadOrCreate(profile.Id, 290, id, fixture.Catalog.Initial, fixture.Catalog.Validate)!;
+        var outcomes = new CombatOutcomeStore(fixture.Root);
+        var award = outcomes.Begin(profile.Id, 290, id, -2, location);
+        outcomes.Complete(profile.Id, 290, id, award, "victory", 0, 0, award: new(110, []));
+
+        var notices = new List<WorldNotice>();
+        using var selection = fixture.Service.Select(profile.Id, profile.Slot, new object(), id, notices.Add)!;
+        Assert.Equal(2, selection.Character.Level);
+        selection.ContextCreated = true;
+        fixture.Service.Join(selection, 100);
+
+        fixture.Service.Redistribute(selection, new(Strength: 5));
+        Assert.Equal(5, notices.OfType<CharacterStats>().Last().Attributes.Statistics.Initiative);
+        Fight(fixture, selection);
+        Assert.Equal(new[] { id, -1L }, notices.OfType<FightStarted>().Last().Order);
+        fixture.Service.Forfeit(selection);
+        fixture.Service.Join(selection, 100);
+
+        fixture.Service.Redistribute(selection, CharacteristicPoints.Empty);
+        Assert.Equal(0, notices.OfType<CharacterStats>().Last().Attributes.Statistics.Initiative);
+        Fight(fixture, selection);
+        Assert.Equal(new[] { -1L, id }, notices.OfType<FightStarted>().Last().Order);
+    }
+    [Fact]
     public void AnimationAckGatesActionsAndOldFightAckCannotUnlockNewFight()
     {
         using var f = new MovementFixture(deferTimers: true, catalog: TurnWorld(), combat: TurnEncounter, spells: TurnSpells());

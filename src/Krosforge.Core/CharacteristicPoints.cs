@@ -11,11 +11,22 @@ public sealed record CharacteristicPoints(int Vitality = 0, int Chance = 0, int 
         && ExactCost(Intelligence) && ExactCost(Strength);
 
     public int Available(int level) => checked((int)(Earned(level) - Spent));
-    public CombatStatistics Statistics => CombatStatistics.Empty with
+    public CombatStatistics Statistics
     {
-        Strength = ElementalValue(Strength), Intelligence = ElementalValue(Intelligence),
-        Chance = ElementalValue(Chance), Agility = ElementalValue(Agility), Vitality = Vitality, Wisdom = Wisdom / 3
-    };
+        get
+        {
+            var strength = ElementalValue(Strength);
+            var intelligence = ElementalValue(Intelligence);
+            var chance = ElementalValue(Chance);
+            var agility = ElementalValue(Agility);
+            return CombatStatistics.Empty with
+            {
+                Initiative = checked(strength + intelligence + chance + agility),
+                Strength = strength, Intelligence = intelligence, Chance = chance, Agility = agility,
+                Vitality = Vitality, Wisdom = Wisdom / 3
+            };
+        }
+    }
 
     private long Spent => (long)Vitality + Chance + Agility + Intelligence + Strength + Wisdom;
     private static bool ExactCost(int points) => points switch
