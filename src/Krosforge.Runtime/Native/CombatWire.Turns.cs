@@ -56,6 +56,7 @@ internal static partial class CombatWire
             Simple(96, 0), Simple(97, player.Life - player.MaximumLife), Simple(102, 0), Simple(5, level),
             Usable(1, player.MaximumAp, player.Ap, player.MaximumAp - player.Ap),
             Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp),
+            Usable(25, 0, player.BonusPower), // Native StatId.DamagePercent
             Usable(3, attributes?.AvailablePoints ?? 0, attributes?.AvailablePoints ?? 0),
             Simple(29, attributes?.Energy ?? 10000), Simple(48, attributes?.Prospecting ?? 100), Simple(109, attributes?.Hunter ?? 0) };
         return B(1, J(entries.Concat(Attributes(player.Statistics)).Select(entry => B(1, entry))
@@ -63,6 +64,15 @@ internal static partial class CombatWire
     }
     private static byte[] Action(long source, int id, int variant, byte[] payload) => E("jsq", J(N(22, id), N(36, source), B(variant, payload)));
     private static byte[] Points(long actor, bool movement, int delta) => Action(actor, movement ? 129 : 102, 13, J(N(2, delta), N(3, actor)));
+    private static byte[] PowerBuff(CombatCast cast, CombatPowerGained power)
+    {
+        byte[] Turn(int round) => J(N(1, power.Order), N(2, round));
+        // juh -> lng -> llg in build 3.7.14.18. The default buff kind and
+        // dispellability are ordinary. The realized bonus is a single value.
+        var buff = J(B(2, Turn(power.Round)), N(3, cast.Critical ? 1 : 0), B(4, Turn(power.EndRound)),
+            N(5, power.Id), N(6, power.EffectId), N(8, cast.Actor), N(10, power.Amount), N(15, cast.Spell.Grade), N(16, cast.Spell.Id));
+        return E("juh", B(1, J(B(1, buff), N(2, 138), N(3, power.Target))));
+    }
     private static byte[][] ActionEvents(FightAction notice)
     {
         var action = notice.Action;
@@ -85,6 +95,12 @@ internal static partial class CombatWire
             {
                 if (effect is CombatLifeGained gain)
                 { result.Add(Action(action.Actor, 108, 39, J(N(2, gain.Target), N(4, gain.Amount)))); continue; }
+                if (effect is CombatPowerGained power)
+                {
+                    if (power.Replaced is { } replaced) result.Add(E("juu", J(N(1, replaced), N(2, power.Target))));
+                    result.Add(PowerBuff(cast, power));
+                    continue;
+                }
                 if (effect is not CombatLifeLost hit) throw new InvalidDataException("Unsupported resolved combat effect.");
                 var (damageAction, wireElement) = hit.Element switch
                 {

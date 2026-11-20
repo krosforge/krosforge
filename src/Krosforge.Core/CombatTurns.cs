@@ -11,6 +11,7 @@ public sealed record CombatSpell(int Id, int LevelId, int Grade, int Cost, int M
     public bool InDiagonal { get; init; }
     public bool NeedsFreeCell { get; init; }
     public bool NeedsOccupiedCell { get; init; }
+    public int MinimumLevel { get; init; } = 1;
     public int Cooldown { get; init; }
     public int InitialCooldown { get; init; }
     public ImmutableArray<CombatEffect> Effects { get; init; } = [];
@@ -32,6 +33,8 @@ public sealed record CombatFighter(long Id, int Team, bool Controlled, int Cell,
     int MaximumAp, int Ap, int MaximumMp, int Mp, CombatStatistics Statistics, ImmutableArray<CombatSpell> Spells)
 {
     public bool Alive => Life > 0;
+    internal ImmutableArray<CombatPowerBonus> PowerBonuses { get; init; } = [];
+    public int BonusPower => PowerBonuses.Sum(bonus => bonus.Amount);
 }
 public abstract record CombatAction(long Actor);
 public sealed record CombatWalk(long Actor, IReadOnlyList<int> Cells) : CombatAction(Actor);
@@ -91,16 +94,17 @@ public sealed partial class CombatTurns
         bool Invalid(CombatDamage damage) => !Enum.IsDefined(damage.Element) || damage.Minimum < 0 || damage.Maximum < damage.Minimum || damage.Maximum == int.MaxValue;
         if (spell.Id < 0 || spell.LevelId <= 0 || spell.Grade <= 0 || spell.Cost <= 0 || spell.MinimumRange < 0 ||
             spell.MaximumRange < spell.MinimumRange || spell.MaximumRange > 560 || spell.CriticalChance is < 0 or > 100 ||
-            spell.PerTurn < 0 || spell.PerTarget < 0 || spell.Cooldown < 0 || spell.InitialCooldown < 0 ||
+                spell.PerTurn < 0 || spell.PerTarget < 0 || spell.Cooldown < 0 || spell.InitialCooldown < 0 || spell.MinimumLevel < 0 ||
             spell.NeedsFreeCell && spell.NeedsOccupiedCell || Invalid(spell.Damage) ||
             spell.CriticalChance > 0 && (spell.Critical is null || Invalid(spell.Critical))) throw new ArgumentException("Invalid combat spell.");
         foreach (var effect in Effects(spell, false).Concat(spell.CriticalChance > 0 ? Effects(spell, true) : []))
         {
-            if (effect is not (CombatDamageEffect or CombatHealEffect) || effect.Targets == CombatTargets.None || (effect.Targets & ~(CombatTargets.Caster | CombatTargets.Allies | CombatTargets.Enemies)) != 0 ||
+            if (effect is not (CombatDamageEffect or CombatHealEffect or CombatPowerEffect) || effect.Targets == CombatTargets.None || (effect.Targets & ~(CombatTargets.Caster | CombatTargets.Allies | CombatTargets.Enemies)) != 0 ||
                 !Enum.IsDefined(effect.Area.Shape) || effect.Area.MinimumRadius < 0 || effect.Area.Radius < effect.Area.MinimumRadius || effect.Area.Radius > 560 ||
                 effect.Area.DecreasePercent is < 0 or > 100 || effect.Area.MaximumDecreaseSteps is < 0 or > 560 ||
                 effect is CombatDamageEffect damage && Invalid(damage.Damage) ||
-                effect is CombatHealEffect heal && (heal.Minimum < 0 || heal.Maximum < heal.Minimum || heal.Maximum == int.MaxValue))
+                effect is CombatHealEffect heal && (heal.Minimum < 0 || heal.Maximum < heal.Minimum || heal.Maximum == int.MaxValue) ||
+                effect is CombatPowerEffect power && (power.EffectId <= 0 || power.Amount <= 0 || power.Turns <= 0 || power.MaximumStacks <= 0))
                 throw new ArgumentException("Invalid combat effect.");
         }
     }
@@ -141,7 +145,7 @@ public sealed partial class CombatTurns
         var fighter = Current; var spell = fighter.Spells.Single(s => s.Id == spellId);
         var critical = spell.CriticalChance > 0 && Roll(roll, 1, 100) <= spell.CriticalChance;
         var target = fighters.Values.SingleOrDefault(f => f.Alive && f.Cell == cell);
-        var beforeFighters = fighters.ToArray(); var beforeSummaries = summaries.ToArray();
+        var beforeFighters = fighters.ToArray(); var beforeSummaries = summaries.ToArray(); var beforePowerIdentity = powerIdentity;
         ImmutableArray<CombatEffectResult> resolved;
         try
         {
@@ -155,6 +159,7 @@ public sealed partial class CombatTurns
             // A later effect or random-source failure cannot leave a partial cast.
             fighters.Clear(); foreach (var entry in beforeFighters) fighters.Add(entry.Key, entry.Value);
             summaries.Clear(); foreach (var entry in beforeSummaries) summaries.Add(entry.Key, entry.Value);
+            powerIdentity = beforePowerIdentity;
             throw;
         }
         var damage = resolved.OfType<CombatLifeLost>().Where(hit => hit.Target == target?.Id).Sum(hit => hit.Amount);
@@ -181,7 +186,12 @@ public sealed partial class CombatTurns
         var fighter = Current;
         var summary = Summary(fighter.Id);
         summaries[fighter.Id] = summary with { TurnsStarted = checked(summary.TurnsStarted + 1) };
-        fighters[fighter.Id] = fighter with { Ap = fighter.MaximumAp, Mp = fighter.MaximumMp };
+        fighters[fighter.Id] = fighter with
+        {
+            Ap = fighter.MaximumAp,
+            Mp = fighter.MaximumMp,
+            PowerBonuses = fighter.PowerBonuses.RemoveAll(bonus => bonus.EndRound <= Round)
+        };
     }
     public IReadOnlyList<int>? Approach(long actor, long serial, int target)
     {

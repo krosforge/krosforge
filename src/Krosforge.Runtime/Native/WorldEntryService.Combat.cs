@@ -124,7 +124,8 @@ internal sealed partial class WorldEntryService
     {
         var fight = selection.Fight!;
         if (map != fight.Encounter.Battle.Id || fight.Started) throw new InvalidDataException("Fight map load does not match preparation.");
-        selection.Emit(new FightLoaded(new(fight.Id, fight.Encounter, selection.Character, selection.Attributes, fight.Preparation.Fighters, spells?.Player(selection.Character.BreedId))
+        selection.Emit(new FightLoaded(new(fight.Id, fight.Encounter, selection.Character, selection.Attributes, fight.Preparation.Fighters,
+            spells?.Player(selection.Character.BreedId, selection.Character.Level))
             { Shortcuts = selection.Rewards.SpellBar }));
         fight.Loaded = true;
     }

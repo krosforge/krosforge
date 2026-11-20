@@ -34,7 +34,7 @@ internal sealed partial class WorldEntryService
         fight.Turns = new(fight.Encounter.Board, fight.Preparation.Fighters.Select(position => position.Controlled
             ? new CombatFighter(position.ActorId, position.Team, true, position.Cell, attributes.Life, attributes.Life,
                 attributes.ActionPoints, attributes.ActionPoints, attributes.MovementPoints, attributes.MovementPoints,
-                attributes.Statistics, spells.Player(selection.Character.BreedId))
+                attributes.Statistics, spells.Player(selection.Character.BreedId, selection.Character.Level))
             : Opponent(position)));
         selection.Emit(new FightStarted(fight.Turns.Order));
         PublishTurn(selection, fight, false);

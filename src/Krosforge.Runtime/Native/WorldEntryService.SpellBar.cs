@@ -3,7 +3,7 @@ namespace Krosforge.Runtime.Native;
 internal sealed partial class WorldEntryService
 {
     private SpellShortcut[] SpellBar(Selection selection) => selection.Rewards.SpellBar ??
-        spells?.Player(selection.Character.BreedId).Select((spell, slot) => new SpellShortcut(slot, spell.Id)).ToArray() ?? [];
+        spells?.Player(selection.Character.BreedId, selection.Character.Level).Select((spell, slot) => new SpellShortcut(slot, spell.Id)).ToArray() ?? [];
 
     internal void AssignSpell(Selection selection, SpellShortcut shortcut) => EditSpellBar(selection, before =>
         spells!.RoleplaySpells(selection.Character.BreedId, selection.Character.Level).Any(spell => spell.Id == shortcut.Spell)

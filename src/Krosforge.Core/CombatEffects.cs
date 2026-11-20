@@ -10,12 +10,18 @@ public abstract record CombatEffect(CombatTargets Targets, CombatArea Area);
 public sealed record CombatDamageEffect(CombatDamage Damage, CombatTargets Targets, CombatArea Area) : CombatEffect(Targets, Area);
 public sealed record CombatHealEffect(int Minimum, int Maximum, bool PercentMaximumLife,
     CombatTargets Targets, CombatArea Area) : CombatEffect(Targets, Area);
+public sealed record CombatPowerEffect(int EffectId, int Amount, int Turns, int MaximumStacks)
+    : CombatEffect(CombatTargets.Caster, new());
+internal sealed record CombatPowerBonus(int Id, int SpellId, int Amount, int EndRound);
 public abstract record CombatEffectResult(long Target);
 public sealed record CombatLifeLost(long Target, CombatElement Element, int Amount, bool Killed) : CombatEffectResult(Target);
 public sealed record CombatLifeGained(long Target, int Amount) : CombatEffectResult(Target);
+public sealed record CombatPowerGained(long Target, int Id, int EffectId, int Amount, int Round, int EndRound,
+    int Order, int? Replaced) : CombatEffectResult(Target);
 
 public sealed partial class CombatTurns
 {
+    private int powerIdentity;
     private static IEnumerable<CombatEffect> Effects(CombatSpell spell, bool critical)
     {
         var configured = critical ? spell.CriticalEffects : spell.Effects;
@@ -58,6 +64,19 @@ public sealed partial class CombatTurns
         // change life/position without repeating or skipping a participant.
         foreach (var effect in Effects(spell, critical))
         {
+            if (effect is CombatPowerEffect power)
+            {
+                var source = fighters[caster.Id];
+                if (!source.Alive) continue;
+                var bonuses = source.PowerBonuses;
+                var matching = bonuses.Where(bonus => bonus.SpellId == spell.Id).ToArray();
+                var replaced = matching.Length < power.MaximumStacks ? null : matching[0];
+                if (replaced is not null) bonuses = bonuses.Remove(replaced);
+                var bonus = new CombatPowerBonus(checked(++powerIdentity), spell.Id, power.Amount, checked(Round + power.Turns));
+                fighters[source.Id] = source with { PowerBonuses = bonuses.Add(bonus) };
+                result.Add(new CombatPowerGained(source.Id, bonus.Id, power.EffectId, bonus.Amount, Round, bonus.EndRound, OrderIndex, replaced?.Id));
+                continue;
+            }
             var targets = fighters.Values.Where(f => f.Alive && Matches(effect.Targets, caster, f))
                 .Select(f => (Fighter: f, Distance: AreaDistance(effect.Area, caster.Cell, cell, f.Cell)))
                 .Where(value => value.Distance.HasValue).OrderBy(value => value.Fighter.Id).ToArray();
@@ -69,7 +88,8 @@ public sealed partial class CombatTurns
                 {
                     case CombatDamageEffect damage:
                         var basis = Roll(roll, damage.Damage.Minimum, damage.Damage.Maximum);
-                        var powered = (long)basis * Math.Max(0L, 100L + caster.Statistics.Power(damage.Damage.Element)) / 100;
+                        var sourcePower = fighters[caster.Id].BonusPower;
+                        var powered = (long)basis * Math.Max(0L, 100L + caster.Statistics.Power(damage.Damage.Element) + sourcePower) / 100;
                         var resisted = (Int128)powered * Math.Max(0L, 100L - target.Statistics.Resistance.GetValueOrDefault(damage.Damage.Element)) / 100;
                         var amount = (int)Int128.Min(target.Life, resisted * factor / 100);
                         if (amount == 0) break;

@@ -10,6 +10,64 @@ namespace Krosforge.Tests;
 
 public sealed partial class WorldSessionTests
 {
+    [Fact]
+    public async Task TcpSavedExplorationShortcutAppearsAndCastsInTheSameCombatSlot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "combat-shortcut-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var profiles = new ProfileStore(root);
+            var profile = profiles.Create("Alpha");
+            var store = new CharacterStore(root);
+            var id = CreateCharacter(store, profile.Id, "Hero");
+            var characters = new CharacterService(store, SyntheticCatalog());
+            var catalog = TurnWorld();
+            CombatSpell spell = new(13366, 41772, 1, 2, 1, 6, true, true, 0, new(CombatElement.Air, 8, 8), null)
+            {
+                Effects = [new CombatDamageEffect(new(CombatElement.Air, 8, 8), CombatTargets.Enemies, new()), new CombatPowerEffect(210967, 30, 2, 2)]
+            };
+            var spells = new CombatSpellCatalog([], players: new Dictionary<int, ImmutableArray<CombatSpell>> { [1] = [spell] },
+                monsters: new Dictionary<int, ImmutableArray<CombatSpell>> { [2] = [spell with { Id = 2, Effects = [] }] },
+                roleplay: new Dictionary<int, ImmutableArray<RoleplaySpell>> { [1] = [new(spell.Id, spell.Grade, 1)] });
+            var service = new WorldEntryService(characters, new LocationStore(root), catalog, combat: TurnEncounter(catalog), spells: spells, outcomes: new(root));
+            await using var host = new LocalSessionHost(characters: characters, worldEntry: service);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(15)); var token = timeout.Token;
+            using var session = host.Register(profile, "pt", _ => { });
+            using var login = new TcpClient();
+            await Login(host, login, session.IssueTicket(), token);
+            using var world = await Enter(host, login, token, emptyRoster: false);
+            await EnterMap(world, id, 100, token);
+            await Event(world, "hkh", token); await Event(world, "ism", token);
+            await Send(world, "iqk", Convert.FromHexString("08011207120308B6681803"), token);
+            await Event(world, "ism", token);
+            await Send(world, "hms", WorldProtocol.Number(2, unchecked((ulong)-30001L)), token);
+            foreach (var type in new[] { "kjz", "kjy", "kjp", "jxi", "jow" }) await Event(world, type, token);
+            await Send(world, "kjt", WorldProtocol.Number(1, 200), token);
+            foreach (var type in new[] { "jnj", "jnv", "jww", "jwj", "jwj", "jxk" }) await Event(world, type, token);
+            var book = await Event(world, "juf", token);
+            var slot = ProtoObject.Read(Assert.Single(book.Repeated(2)).Bytes, 128);
+            Assert.Equal(3UL, slot.UInt64(3));
+            Assert.Equal(13366UL, ProtoObject.Read(slot.Bytes(2), 128).UInt64(1));
+            Assert.Equal(13366UL, ProtoObject.Read(Assert.Single(book.Repeated(5)).Bytes, 128).UInt64(2));
+            await Event(world, "jxh", token);
+            await Send(world, "jxj", [8, 1], token);
+            foreach (var type in new[] { "jxr", "jvu", "krg", "jvi", "jvj" }) await Event(world, type, token);
+            await Send(world, "jsr", Convert.FromHexString("08B668108001"), token);
+            await Event(world, "jqh", token);
+            Assert.Equal(300UL, (await Event(world, "jsq", token)).UInt64(22));
+            Assert.Equal(102UL, (await Event(world, "jsq", token)).UInt64(22));
+            Assert.Equal(98UL, (await Event(world, "jsq", token)).UInt64(22));
+            Assert.Equal(138UL, ProtoObject.Read((await Event(world, "juh", token)).Bytes(1), 128).UInt64(2));
+            await Event(world, "jsy", token);
+            var stats = await Event(world, "krg", token);
+            Assert.Equal(0UL, RewardWireTests.Stat(stats, 25));
+            var power = ProtoObject.Read(stats.Bytes(1), 128).Repeated(1).Select(field => ProtoObject.Read(field.Bytes, 128)).Single(row => row.UInt64(2) == 25);
+            Assert.Equal(30UL, ProtoObject.Read(power.Bytes(1), 128).UInt64(6));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
