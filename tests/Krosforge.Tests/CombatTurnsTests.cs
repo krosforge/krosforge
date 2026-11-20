@@ -124,6 +124,11 @@ public sealed class CombatTurnsTests
         Assert.SkipWhen(root is null, "Requires the separately installed reference client.");
         var catalog = new CombatSpellCatalog(root!);
         Assert.Equal(new[] { 0 }, catalog.Player(8).Select(s => s.Id));
+        var roleplay = catalog.RoleplaySpells(8, 1);
+        Assert.Contains(roleplay, spell => spell.Id == 0);
+        Assert.Contains(roleplay, spell => spell.Id != 0);
+        Assert.All(roleplay, spell => Assert.InRange(spell.MinimumLevel, 0, 1));
+        Assert.True(catalog.RoleplaySpells(8, 200).Length > roleplay.Length);
         var book = catalog.Player(3); Assert.Equal(new[] { 0, 13338, 13331 }, book.Select(s => s.Id));
         var ranged = book.Single(s => s.Id == 13338);
         Assert.Equal(41718, ranged.LevelId); Assert.Equal(2, ranged.Cost); Assert.Equal(8, ranged.MaximumRange);

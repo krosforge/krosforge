@@ -17,13 +17,11 @@ internal static partial class CombatWire
             B(2, J(N(2, f.Alive ? 1 : 0), N(5, f.Id), f.Level is { } level ? B(3, J(N(2, level), f.Id == result.Character.Id ? experience : [])) : [])),
             f.Id == result.Character.Id ? B(3, J(N(2, result.Receipt.Reward),
                 result.Receipt.Award.Items.Length > 0 ? InventoryWire.Prize(result.Receipt.Award.Items) : [])) : []))).ToArray();
-        byte[][] levelUp = result.PreviousLevel is { } previous && result.Character.Level > previous
-            ? [E("kqp", N(1, result.Character.Level))] : [];
-        return [.. levelUp, E("jwp", J(team, J(fighters), N(8, result.Receipt.DurationMilliseconds))),
+        return [E("jwp", J(team, J(fighters), N(8, result.Receipt.DurationMilliseconds))),
             E("jwh", ResultStatistics(result.Character.Id, result.Summary)),
             E("irl", InventoryWire.Snapshot(result.Receipt.Balance, result.Receipt.State.Items)),
             E("ith", InventoryWire.Balance(result.Receipt.Balance)),
-            E("krg", WorldEntryWire.Statistics(result.Attributes, result.Character.Level))];
+            .. result.LevelChanged ? Array.Empty<byte[]>() : [E("krg", WorldEntryWire.Statistics(result.Attributes, result.Character.Level))]];
     }
 
     private static byte[] ResultStatistics(long actor, CombatSummary summary)

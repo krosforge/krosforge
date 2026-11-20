@@ -112,7 +112,7 @@ public sealed class DatabaseMigrationTests : IDisposable
             INSERT INTO characters VALUES(42,'11111111-1111-1111-1111-111111111111',290,'Hero','HERO','{}');
             INSERT INTO character_wallets VALUES(42,7);
             INSERT INTO combat_outcomes VALUES('fight',42,-2,100,10,1,'victory',7,100);
-            DROP TABLE combat_awards; DROP TABLE character_items; DROP TABLE character_progression;
+            DROP TABLE character_allocations; DROP TABLE combat_awards; DROP TABLE character_items; DROP TABLE character_progression;
             PRAGMA user_version=3;
             """);
         Assert.Throws<IOException>(() => DatabaseSchema.Initialize(db, root, () => throw new IOException("Interrupted")));

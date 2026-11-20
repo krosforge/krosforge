@@ -11,6 +11,8 @@ internal sealed record EntryAttributes(int Life, int ActionPoints, int MovementP
     public long Experience { get; init; }
     public long ExperienceFloor { get; init; }
     public long Currency { get; init; }
+    public int AvailablePoints { get; init; }
+    public CombatStatistics Statistics { get; init; } = CombatStatistics.Empty;
 }
 internal sealed record EntryMap(long Id, int Subarea, IReadOnlySet<int> WalkableCells)
 {

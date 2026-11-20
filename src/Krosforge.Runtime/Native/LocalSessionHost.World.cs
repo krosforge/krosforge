@@ -146,6 +146,9 @@ internal sealed partial class LocalSessionHost
                             body.Only();
                             worldEntry!.PreviewBattleMap(selected);
                             continue;
+                        case "krc" when selected is not null:
+                            worldEntry!.Redistribute(selected, WorldEntryWire.ReadAllocation(request.Payload));
+                            continue;
                         case "jsr" when selected is not null:
                             var cast = CombatWire.CastRequest(request.Payload);
                             worldEntry!.Cast(selected, cast.Spell, cast.Cell); continue;

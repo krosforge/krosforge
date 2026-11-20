@@ -20,6 +20,8 @@ public sealed record CombatStatistics(int Initiative, int Strength, int Intellig
     ImmutableDictionary<CombatElement, int> Resistance)
 {
     public static CombatStatistics Empty { get; } = new(0, 0, 0, 0, 0, ImmutableDictionary<CombatElement, int>.Empty);
+    public int Vitality { get; init; }
+    public int Wisdom { get; init; }
     public int Power(CombatElement element) => element switch
     {
         CombatElement.Neutral or CombatElement.Earth => Strength, CombatElement.Fire => Intelligence,

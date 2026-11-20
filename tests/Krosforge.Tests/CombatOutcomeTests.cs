@@ -92,7 +92,12 @@ public sealed partial class WorldSessionTests
         f.Service.CombatAcknowledge(selected, sequence); f.Service.CombatAcknowledge(selected, sequence);
         var result = Assert.Single(notices.OfType<FightCompleted>());
         Assert.Equal(125, result.Receipt.Award.Experience);
-        Assert.Equal(1, result.PreviousLevel);
+        Assert.True(result.LevelChanged);
+        Assert.DoesNotContain(notices, notice => notice is CharacterLeveled);
+        f.Service.Join(selected, selected.Location.MapId);
+        var level = Assert.Single(notices.OfType<CharacterLeveled>());
+        Assert.Equal(2, level.Level);
+        Assert.Equal(5, level.Attributes.AvailablePoints);
         selected.Dispose();
         using var restored = f.Service.Select(selected.Profile, selected.Account, new object(), selected.Character.Id)!;
         Assert.Equal(125, restored.Rewards.Experience); Assert.Equal(2, restored.Character.Level);

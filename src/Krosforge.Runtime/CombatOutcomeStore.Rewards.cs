@@ -1,12 +1,16 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Krosforge.Core;
 using Microsoft.Data.Sqlite;
 namespace Krosforge.Runtime;
 
 internal sealed record ItemAward(int Template, int Quantity, string Effects = "[]");
 internal sealed record InventoryItem(long Id, int Template, int Quantity, string Effects);
 internal sealed record CombatAward(long Experience, ItemAward[] Items);
-internal sealed record CharacterRewards(long Experience, InventoryItem[] Items);
+internal sealed record CharacterRewards(long Experience, InventoryItem[] Items)
+{
+    internal CharacteristicPoints Allocation { get; init; } = CharacteristicPoints.Empty;
+}
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 internal sealed record InventoryEffect(int Action, int Minimum, int Maximum, int Constant);
 
@@ -48,9 +52,37 @@ internal sealed partial class CombatOutcomeStore
         c.CommandText = "SELECT experience FROM character_progression WHERE character_id=$character";
         var experience = Convert.ToInt64(c.ExecuteScalar());
         c.CommandText = "SELECT id,template_id,quantity,effects FROM character_items WHERE character_id=$character ORDER BY id";
-        using var rows = c.ExecuteReader(); var items = new List<InventoryItem>();
-        while (rows.Read()) items.Add(new(rows.GetInt64(0), rows.GetInt32(1), rows.GetInt32(2), rows.GetString(3)));
-        return new(experience, items.ToArray());
+        var items = new List<InventoryItem>();
+        using (var rows = c.ExecuteReader())
+            while (rows.Read()) items.Add(new(rows.GetInt64(0), rows.GetInt32(1), rows.GetInt32(2), rows.GetString(3)));
+        c.CommandText = "SELECT vitality,chance,agility,intelligence,strength,wisdom FROM character_allocations WHERE character_id=$character";
+        using var allocation = c.ExecuteReader();
+        return new(experience, items.ToArray())
+        {
+            Allocation = allocation.Read()
+                ? new(allocation.GetInt32(0), allocation.GetInt32(1), allocation.GetInt32(2), allocation.GetInt32(3), allocation.GetInt32(4), allocation.GetInt32(5))
+                : CharacteristicPoints.Empty
+        };
+    }
+    internal CharacterRewards Redistribute(Guid profile, int realm, long character, ExperienceCurve curve, CharacteristicPoints points)
+    {
+        using var db = Open(); using var tx = db.BeginTransaction(deferred: false);
+        using var c = Owned(db, tx, profile, realm, character);
+        var state = ReadState(c);
+        if (!points.Fits(curve.At(state.Experience).Level) || state.Allocation == points) return state;
+        c.Parameters.AddWithValue("$vitality", points.Vitality);
+        c.Parameters.AddWithValue("$chance", points.Chance);
+        c.Parameters.AddWithValue("$agility", points.Agility);
+        c.Parameters.AddWithValue("$intelligence", points.Intelligence);
+        c.Parameters.AddWithValue("$strength", points.Strength);
+        c.Parameters.AddWithValue("$wisdom", points.Wisdom);
+        c.CommandText = """
+            INSERT INTO character_allocations VALUES($character,$vitality,$chance,$agility,$intelligence,$strength,$wisdom)
+            ON CONFLICT(character_id) DO UPDATE SET vitality=excluded.vitality, chance=excluded.chance,
+                agility=excluded.agility, intelligence=excluded.intelligence, strength=excluded.strength, wisdom=excluded.wisdom;
+            """;
+        c.ExecuteNonQuery(); tx.Commit();
+        return state with { Allocation = points };
     }
     private static void ApplyAward(SqliteCommand c, CombatAward award)
     {

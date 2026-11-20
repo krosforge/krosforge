@@ -4,6 +4,8 @@ using System.Text.Json;
 using Krosforge.Core;
 namespace Krosforge.Runtime.Native;
 
+internal sealed record RoleplaySpell(int Id, int Grade, int MinimumLevel);
+
 internal sealed class CombatSpellCatalog
 {
     private sealed record Source(string Path, string Sha256);
@@ -13,6 +15,7 @@ internal sealed class CombatSpellCatalog
     internal CombatTiming Timing { get; } = new();
     private readonly ImmutableArray<CombatSpell> common;
     private readonly Dictionary<int, ImmutableArray<CombatSpell>> players;
+    private readonly Dictionary<int, ImmutableArray<RoleplaySpell>> roleplay = [];
     private readonly Dictionary<(int Id, int Grade), CombatSpell> monsters;
     internal CombatSpellCatalog(string root, IEnumerable<int>? monsterSpells = null)
     {
@@ -25,10 +28,14 @@ internal sealed class CombatSpellCatalog
             Timing.AnimationMilliseconds is < 100 or > 60000 || Timing.ReadyMilliseconds is < 100 or > 60000 ||
             Timing.AutomaticMilliseconds is < 1 or > 5000) throw new InvalidDataException("Invalid combat timing.");
         var wantedMonsters = config.Monsters.Concat(monsterSpells ?? []).Distinct().ToArray();
-        var wanted = config.Common.Concat(config.Players.SelectMany(p => p.Spells)).Concat(wantedMonsters).ToHashSet();
+        var breeds = CreationDataReader.Read(Path.Combine(root, config.Breeds.Path), config.Breeds.Sha256).ToDictionary(r => N(r, "id"));
+        var breedBooks = breeds.ToDictionary(row => row.Key, row => Array(row.Value, "breedSpellsId")
+            .Select(value => Convert.ToInt32(value, CultureInfo.InvariantCulture)).ToArray());
+        var displayIds = config.Common.Concat(breedBooks.Values.SelectMany(ids => ids)).ToHashSet();
+        var wanted = displayIds.Concat(config.Players.SelectMany(p => p.Spells)).Concat(wantedMonsters).ToHashSet();
         var spells = CreationDataReader.Read(Path.Combine(root, config.Spells.Path), config.Spells.Sha256,
             maxOutput: 8388608, selectedKeys: wanted.Select(id => (long)id).ToHashSet()).ToDictionary(r => N(r, "id"));
-        var levelIds = spells.Values.SelectMany(r => wantedMonsters.Contains(N(r, "id")) ? Array(r, "spellLevels") : Array(r, "spellLevels").Take(1))
+        var levelIds = spells.Values.SelectMany(r => Array(r, "spellLevels"))
             .Select(value => Convert.ToInt64(value, CultureInfo.InvariantCulture)).ToHashSet();
         var levels = CreationDataReader.Read(Path.Combine(root, config.Levels.Path), config.Levels.Sha256,
             maxOutput: 33554432, selectedKeys: levelIds, maxInput: 2097152).ToDictionary(r => N(r, "id"));
@@ -39,12 +46,19 @@ internal sealed class CombatSpellCatalog
             return Parse(level);
         }
         common = config.Common.Select(Read).ToImmutableArray();
-        var breeds = CreationDataReader.Read(Path.Combine(root, config.Breeds.Path), config.Breeds.Sha256,
-            selectedKeys: config.Players.Select(p => (long)p.Breed).ToHashSet()).ToDictionary(r => N(r, "id"));
+        var display = displayIds.ToDictionary(id => id, id => Array(spells[id], "spellLevels").Select(value =>
+        {
+            var row = levels[Convert.ToInt32(value, CultureInfo.InvariantCulture)];
+            var minimum = N(row, "minPlayerLevel");
+            var grade = N(row, "grade");
+            if (N(row, "spellId") != id || grade <= 0 || minimum < 0) throw new InvalidDataException("Invalid roleplay spell grade.");
+            return new RoleplaySpell(id, grade, minimum);
+        }).ToImmutableArray());
+        roleplay = breedBooks.ToDictionary(row => row.Key,
+            row => config.Common.Concat(row.Value).Distinct().SelectMany(id => display[id]).ToImmutableArray());
         players = config.Players.ToDictionary(p => p.Breed, p =>
         {
-            var native = Array(breeds[p.Breed], "breedSpellsId").Select(v => Convert.ToInt32(v, CultureInfo.InvariantCulture)).ToHashSet();
-            if (p.Spells.Any(id => !native.Contains(id))) throw new InvalidDataException("Spell does not belong to the configured class.");
+            if (p.Spells.Any(id => !breedBooks[p.Breed].Contains(id))) throw new InvalidDataException("Spell does not belong to the configured class.");
             return p.Spells.Select(Read).ToImmutableArray();
         });
         monsters = wantedMonsters.SelectMany(id => Array(spells[id], "spellLevels").Select(value =>
@@ -54,6 +68,9 @@ internal sealed class CombatSpellCatalog
             return Parse(row, monster: true);
         })).ToDictionary(spell => (spell.Id, spell.Grade));
     }
+    internal RoleplaySpell[] RoleplaySpells(int breed, int level) => roleplay.GetValueOrDefault(breed, [])
+        .Where(spell => spell.MinimumLevel <= level).GroupBy(spell => spell.Id)
+        .Select(grades => grades.MaxBy(spell => spell.Grade)!).ToArray();
     internal CombatSpellCatalog(IEnumerable<CombatSpell> common, IReadOnlyDictionary<int, ImmutableArray<CombatSpell>>? players = null,
         IReadOnlyDictionary<int, ImmutableArray<CombatSpell>>? monsters = null)
     {

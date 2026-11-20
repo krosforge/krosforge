@@ -54,7 +54,6 @@ public sealed partial class WorldSessionTests
             if (!loseFinalAck)
             {
                 await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, sequence), WorldProtocol.Number(3, 1)), token);
-                Assert.Equal(2UL, (await Event(world, "kqp", token)).UInt64(1));
                 var result = await Event(world, "jwp", token);
                 var player = result.Repeated(4).Select(v => ProtoObject.Read(v.Bytes, 4096))
                     .Single(v => ProtoObject.Read(v.Bytes(2), 4096).UInt64(5) == (ulong)id);
@@ -83,9 +82,31 @@ public sealed partial class WorldSessionTests
                 Assert.Equal(1UL, ProtoObject.Read(details.Bytes(11), 4096).UInt64(3));
                 AssertCombatInventory(await Event(world, "irl", token));
                 Assert.Equal(1UL, (await Event(world, "ith", token)).UInt64(2));
-                Assert.Equal(1UL, ProtoObject.Read((await Event(world, "krg", token)).Bytes(1), 4096).UInt64(6));
                 foreach (var type in new[] { "kjy", "kjp", "jow" }) await Event(world, type, token);
                 await LoadedMap(world, 100, token, 250, 200);
+                Assert.Equal(2UL, (await Event(world, "kqp", token)).UInt64(1));
+                var levelStats = await Event(world, "krg", token);
+                Assert.Equal(1UL, ProtoObject.Read(levelStats.Bytes(1), 4096).UInt64(6));
+                Assert.Equal(5UL, RewardWireTests.Stat(levelStats, 3));
+                Assert.Equal(105UL, RewardWireTests.Stat(levelStats, 0));
+
+                // Native krc replaces the complete allocation. A retry is idempotent.
+                var allocation = Convert.FromHexString("1005");
+                foreach (var request in new[] { allocation, allocation, Convert.FromHexString("2006") })
+                {
+                    await Send(world, "krc", request, token);
+                    var points = await Event(world, "krg", token);
+                    Assert.Equal(0UL, RewardWireTests.Stat(points, 3));
+                    Assert.Equal(5UL, RewardWireTests.Stat(points, 11));
+                    Assert.Equal(105UL, RewardWireTests.Stat(points, 0));
+                    Assert.Equal(110UL, RewardWireTests.Stat(points, 95, usable: false));
+                }
+                await Send(world, "krc", [], token);
+                var reset = await Event(world, "krg", token);
+                Assert.Equal(5UL, RewardWireTests.Stat(reset, 3));
+                Assert.Equal(0UL, RewardWireTests.Stat(reset, 11));
+                await Send(world, "krc", allocation, token);
+                Assert.Equal(0UL, RewardWireTests.Stat(await Event(world, "krg", token), 3));
                 // A late duplicate acknowledgement cannot produce another result or payment.
                 await Send(world, "jst", WorldProtocol.Join(WorldProtocol.Number(2, sequence), WorldProtocol.Number(3, 1)), token);
                 await Send(world, "kne", WorldProtocol.Number(2, 1), token); await Event(world, "knb", token);
@@ -97,8 +118,11 @@ public sealed partial class WorldSessionTests
             await Send(fresh, "kkc", [], token); await Event(fresh, "kjp", token); await Event(fresh, "jow", token);
             var itemId = AssertCombatInventory(await Event(fresh, "irl", token));
             Assert.Equal(1UL, (await Event(fresh, "ith", token)).UInt64(2));
-            var restoredStatistics = ProtoObject.Read((await Event(fresh, "krg", token)).Bytes(1), 4096);
+            var restored = await Event(fresh, "krg", token);
+            var restoredStatistics = ProtoObject.Read(restored.Bytes(1), 4096);
             Assert.Equal(125UL, restoredStatistics.UInt64(11)); Assert.Equal(1UL, restoredStatistics.UInt64(6));
+            Assert.Equal(loseFinalAck ? 5UL : 0UL, RewardWireTests.Stat(restored, 3));
+            Assert.Equal(loseFinalAck ? 0UL : 5UL, RewardWireTests.Stat(restored, 11));
             await LoadedMap(fresh, 100, token, 250, 200);
             Assert.Equal(catalog.Initial, locations.LoadOrCreate(profile.Id, 290, id, catalog.Initial, catalog.Validate));
             Assert.Equal(1, new CombatOutcomeStore(root).Recover(profile.Id, 290, id));

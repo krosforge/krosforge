@@ -53,12 +53,13 @@ internal static partial class CombatWire
         var life = player ? view.Attributes.Life : monster.Life;
         var ap = player ? view.Attributes.ActionPoints : monster.ActionPoints;
         var mp = player ? view.Attributes.MovementPoints : monster.MovementPoints;
+        var stats = player ? view.Attributes.Statistics : monster.Statistics;
         var level = player ? character.Level : monster.Level;
         byte[] Simple(int id, int value) => B(4, J(N(2, id), B(3, N(2, value))));
         byte[] Usable(int id, int value) => B(4, J(N(2, id), B(1, J(N(4, value), N(7, 0)))));
-        var common = J(N(1, 2), Usable(0, life), Simple(95, life), Simple(96, 0), Simple(97, 0), Simple(102, 0),
+        var common = J(N(1, 2), Usable(0, life - stats.Vitality), Simple(95, life), Simple(96, 0), Simple(97, 0), Simple(102, 0),
             Simple(5, level), Usable(1, ap), Usable(23, mp),
-            J(Attributes(player ? CombatStatistics.Empty : monster.Statistics).Select(entry => B(4, entry)).ToArray()));
+            J(Attributes(stats).Select(entry => B(4, entry)).ToArray()));
         var identity = player
             ? B(5, J(N(2, level), B(4, Encoding.UTF8.GetBytes(character.Name)), B(1, J(N(2, character.BreedId), N(4, character.Gender), N(6, level)))))
             : B(6, B(3, J(N(1, monster.Grade), N(2, level), N(3, monster.Definition))));

@@ -3,7 +3,7 @@ namespace Krosforge.Runtime;
 
 internal static class DatabaseSchema
 {
-    internal const int Current = 4;
+    internal const int Current = 5;
 
     internal static void Initialize(SqliteConnection db, string directory, Action? beforeCommit = null)
     {
@@ -53,7 +53,7 @@ internal static class DatabaseSchema
             CREATE UNIQUE INDEX combat_active_character ON combat_outcomes(character_id) WHERE status='active';
             PRAGMA user_version=3;
             """, transaction);
-        Execute(db, """
+        if (version < 4) Execute(db, """
             CREATE TABLE character_progression(
                 character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
                 experience INTEGER NOT NULL CHECK(typeof(experience)='integer' AND experience>=0));
@@ -69,6 +69,17 @@ internal static class DatabaseSchema
                 experience INTEGER NOT NULL CHECK(typeof(experience)='integer' AND experience>=0),
                 items TEXT NOT NULL);
             PRAGMA user_version=4;
+            """, transaction);
+        Execute(db, """
+            CREATE TABLE character_allocations(
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                vitality INTEGER NOT NULL CHECK(vitality BETWEEN 0 AND 32767),
+                chance INTEGER NOT NULL CHECK(chance BETWEEN 0 AND 32767),
+                agility INTEGER NOT NULL CHECK(agility BETWEEN 0 AND 32767),
+                intelligence INTEGER NOT NULL CHECK(intelligence BETWEEN 0 AND 32767),
+                strength INTEGER NOT NULL CHECK(strength BETWEEN 0 AND 32767),
+                wisdom INTEGER NOT NULL CHECK(wisdom BETWEEN 0 AND 32767));
+            PRAGMA user_version=5;
             """, transaction);
         beforeCommit?.Invoke();
         transaction.Commit();
