@@ -14,6 +14,10 @@ internal sealed record ActorMoved(long Id, IReadOnlyList<int> Cells) : WorldNoti
 internal sealed record ActorCorrected(long Id, int Cell) : WorldNotice;
 internal sealed record MovementReleased : WorldNotice;
 internal sealed record MapLoading(long Map) : WorldNotice;
+internal sealed record CharacterStats(EntryAttributes Attributes, int Level) : WorldNotice;
+internal sealed record CharacterLeveled(int Level, EntryAttributes Attributes) : WorldNotice;
+internal sealed record RoleplaySpellBook(IReadOnlyList<RoleplaySpell> Spells) : WorldNotice;
+internal sealed record SpellBarSnapshot(IReadOnlyList<SpellShortcut> Shortcuts) : WorldNotice;
 internal sealed record BattleMapPreview(long Source, BattleMap Battle) : WorldNotice;
 internal sealed record EncounterAppeared(CombatEncounter Encounter) : WorldNotice;
 internal sealed record EncounterDeparted(long Group) : WorldNotice;

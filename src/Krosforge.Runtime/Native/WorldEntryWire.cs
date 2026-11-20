@@ -25,6 +25,19 @@ internal static class WorldEntryWire
     internal static byte[] LoadMap(long map) => N(1, map);
     internal static byte[] Reference(long map, int subarea) => J(N(3, map), N(5, subarea));
     internal static byte[] EmptyInventory(long currency = 0) => J(B(3, []), N(4, currency));
+    internal static CharacteristicPoints ReadAllocation(byte[] payload)
+    {
+        var body = ProtoObject.Read(payload, 8);
+        body.Only(1, 2, 3, 4, 5, 6, 7, 8);
+        if (body.UInt64(1, false) != 0 || body.UInt64(3, false) != 0)
+            throw new ProtocolException("Unsupported characteristic point allocation mode.");
+        int Cost(int field)
+        {
+            var value = body.UInt64(field, false);
+            return value <= (ulong)short.MaxValue ? (int)value : throw new ProtocolException("Invalid characteristic point cost.");
+        }
+        return new(Cost(2), Cost(4), Cost(5), Cost(6), Cost(7), Cost(8));
+    }
     internal static byte[] Statistics(WorldEntryService.Selection selection) => Statistics(selection.Attributes, selection.Character.Level);
     internal static byte[] Statistics(EntryAttributes attributes, int level)
     {
@@ -32,9 +45,10 @@ internal static class WorldEntryWire
         byte[] Usable(int id, int value) => B(1, J(N(2, id), B(1, J(N(4, value), N(7, 0)))));
         // StatId names recovered from the current metadata: HitPoints, MaxLifePoints,
         // Shield, HitPointLoss, CurPermanentDamage, Level, ActionPoints, MovementPoints.
-        var stats = J(Usable(0, attributes.Life), Simple(95, attributes.Life), Simple(96, 0), Simple(97, 0),
-            Simple(5, level), Usable(3, 0), Simple(102, 0),
-            J(CombatWire.Attributes(CombatStatistics.Empty).Select(entry => B(1, entry)).ToArray()),
+        // The native life display adds the Vitality record to the base life entry.
+        var stats = J(Usable(0, attributes.Life - attributes.Statistics.Vitality), Simple(95, attributes.Life), Simple(96, 0), Simple(97, 0),
+            Simple(5, level), Usable(3, attributes.AvailablePoints), Simple(102, 0),
+            J(CombatWire.Attributes(attributes.Statistics).Select(entry => B(1, entry)).ToArray()),
             Usable(1, attributes.ActionPoints), Usable(23, attributes.MovementPoints),
             Simple(29, attributes.Energy), Simple(48, attributes.Prospecting), Simple(109, attributes.Hunter),
             N(11, attributes.Experience), N(8, attributes.ExperienceFloor), N(2, attributes.NextLevelExperience), N(6, attributes.Currency), B(10, []));
@@ -64,6 +78,10 @@ internal static class WorldEntryWire
         ActorDeparted departed => [WorldProtocol.Event("kjz", N(1, departed.Id))],
         ActorMoved moved => [WorldProtocol.Event("jnz", WorldMovementWire.Movement(moved.Id, moved.Cells))],
         ActorCorrected corrected => [WorldProtocol.Event("joz", WorldMovementWire.Correction(corrected.Id, corrected.Cell))],
+        CharacterStats changed => [WorldProtocol.Event("krg", Statistics(changed.Attributes, changed.Level))],
+        CharacterLeveled raised => [WorldProtocol.Event("kqp", N(1, raised.Level)), WorldProtocol.Event("krg", Statistics(raised.Attributes, raised.Level))],
+        RoleplaySpellBook book => [WorldProtocol.Event("hkh", J(book.Spells.Select(spell => B(1, J(N(2, spell.Id), N(4, spell.Grade)))).ToArray()))],
+        SpellBarSnapshot bar => [WorldProtocol.Event("ism", SpellShortcutWire.Snapshot(bar.Shortcuts))],
         MovementReleased => [WorldProtocol.Event("jpk", [])],
         MapLoading loading => [WorldProtocol.Event("jow", LoadMap(loading.Map))],
         _ => CombatWire.Events(notice)

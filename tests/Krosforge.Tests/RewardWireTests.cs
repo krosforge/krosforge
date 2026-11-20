@@ -9,23 +9,34 @@ namespace Krosforge.Tests;
 public sealed class RewardWireTests
 {
     private static ProtoObject Read(byte[] bytes) => ProtoObject.Read(bytes, 4096);
-    [Theory]
-    [InlineData(1, 2)]
-    [InlineData(2, 5)]
-    [InlineData(2, 2)]
-    public void LevelNotificationPrecedesResultOnlyWhenLevelIncreases(int previous, int current)
+    [Fact]
+    public void SpellBarAssignmentAndSnapshotUseTheNativeSpellVariant()
     {
-        CharacterWire character = new(1, "Hero", 1, 0, 1, 1, current, new(1, [], [], [100]));
-        var result = new FightCompleted(character, new(100, 6, 3, 650), [],
-            new(Guid.NewGuid(), "victory", 0, 0, 1000), new()) { PreviousLevel = previous };
-        var events = CombatWire.Events(result).Select(frame => Read(Read(Read(frame).Bytes(3)).Bytes(1))).ToArray();
-        if (current > previous)
-        {
-            Assert.Equal("type.ankama.com/kqp", events[0].Text(1));
-            Assert.Equal((ulong)current, Read(events[0].Bytes(2)).UInt64(1));
-            Assert.Equal("type.ankama.com/jwp", events[1].Text(1));
-        }
-        else Assert.DoesNotContain(events, any => any.Text(1) == "type.ankama.com/kqp");
+        var request = Read(Convert.FromHexString("080112071203089A681801"));
+        Assert.True(SpellShortcutWire.IsSpellBar(request));
+        var shortcut = SpellShortcutWire.ReadAssignment(request);
+        Assert.Equal(new SpellShortcut(1, 13338), shortcut);
+        var snapshot = Read(SpellShortcutWire.Snapshot([shortcut]));
+        Assert.Equal(1UL, snapshot.UInt64(2));
+        var entry = Read(Assert.Single(snapshot.Repeated(1)).Bytes);
+        Assert.Equal(1UL, entry.UInt64(3));
+        Assert.Equal(13338UL, Read(entry.Bytes(2)).UInt64(1));
+    }
+    [Theory]
+    [InlineData(2)]
+    [InlineData(5)]
+    public void RoleplayLevelNotificationPrecedesTheAuthoritativeStatistics(int current)
+    {
+        var level = new CharacterLeveled(current, new(100, 6, 3, 650) { AvailablePoints = (current - 1) * 5 });
+        var events = WorldEntryWire.Events(level).Select(frame => Read(Read(Read(frame).Bytes(3)).Bytes(1))).ToArray();
+        Assert.Equal(new[] { "type.ankama.com/kqp", "type.ankama.com/krg" }, events.Select(e => e.Text(1)));
+        Assert.Equal((ulong)current, Read(events[0].Bytes(2)).UInt64(1));
+        Assert.Equal((ulong)((current - 1) * 5), Stat(Read(events[1].Bytes(2)), 3));
+    }
+    internal static ulong Stat(ProtoObject payload, int id, bool usable = true)
+    {
+        var entry = Read(payload.Bytes(1)).Repeated(1).Select(field => Read(field.Bytes)).Single(stat => stat.UInt64(2) == (ulong)id);
+        return usable ? Read(entry.Bytes(1)).UInt64(4) : Read(entry.Bytes(3)).UInt64(2);
     }
     [Fact]
     public void MapSnapshotPublishesConfiguredExperienceAndDropPercentagesWithoutRounding()

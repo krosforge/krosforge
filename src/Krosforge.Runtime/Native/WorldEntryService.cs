@@ -10,6 +10,7 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
     private readonly Dictionary<long, Selection> active = [];
     private readonly WorldEntryCatalog catalog = catalog;
     private readonly TimeProvider clock = time ?? TimeProvider.System;
+    private const int LifePerLevel = 5;
     internal sealed class Motion(WorldPath path, int[] turns, long started, TimeSpan firstStepCredit, int announcementFrom = 0)
     {
         internal WorldPath Path { get; } = path;
@@ -33,7 +34,13 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             get
             {
                 var band = owner.catalog.Experience.At(Rewards.Experience);
-                return owner.catalog.Attributes with { Experience = Rewards.Experience, ExperienceFloor = band.Floor, NextLevelExperience = band.Ceiling, Currency = Currency };
+                var stats = Rewards.Allocation.Statistics;
+                return owner.catalog.Attributes with
+                {
+                    Life = owner.catalog.Attributes.Life + (band.Level - 1) * LifePerLevel + stats.Vitality,
+                    Experience = Rewards.Experience, ExperienceFloor = band.Floor, NextLevelExperience = band.Ceiling,
+                    Currency = Currency, AvailablePoints = Rewards.Allocation.Available(band.Level), Statistics = stats
+                };
             }
         }
         internal CharacterRewards Rewards { get; set; } = new(0, []);
@@ -42,6 +49,8 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
         internal Dictionary<long, int> BattleIndices { get; } = [];
         internal bool ContextCreated { get; set; }
         internal bool MapReady { get; set; }
+        internal bool SpellBookPublished { get; set; }
+        internal bool PendingLevelUp { get; set; }
         internal Action<WorldNotice> Emit { get; } = emit;
         internal Action Disconnect { get; } = disconnect;
         internal Motion? Moving { get; set; }
@@ -71,6 +80,7 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             };
             selection.Rewards = outcomes?.Read(profile, ServerPresentation.RealmId, id) ?? new(0, []);
             selection.Character = selection.Character with { Level = catalog.Experience.At(selection.Rewards.Experience).Level };
+            if (!selection.Rewards.Allocation.Fits(selection.Character.Level)) throw new InvalidDataException("Invalid saved characteristic point distribution.");
             active.Add(id, selection); return selection;
         }
     }
@@ -92,6 +102,21 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
             var visible = Members(map).OrderBy(s => s.Character.Id).ToArray();
             selection.Emit(new MapSnapshot(selection.Map, visible.Select(s => Snapshot(s, now)).ToArray(), AvailableEncounters(map), combat?.NeutralCalendar)
                 { Rates = rewards?.Presentation ?? new() });
+            if (selection.PendingLevelUp)
+            {
+                selection.PendingLevelUp = false;
+                selection.Emit(new CharacterLeveled(selection.Character.Level, selection.Attributes));
+                selection.SpellBookPublished = false;
+            }
+            if (!selection.SpellBookPublished)
+            {
+                selection.SpellBookPublished = true;
+                if (spells?.RoleplaySpells(selection.Character.BreedId, selection.Character.Level) is { Length: > 0 } book)
+                {
+                    selection.Emit(new RoleplaySpellBook(book));
+                    selection.Emit(new SpellBarSnapshot(SpellBar(selection)));
+                }
+            }
             foreach (var other in visible)
                 if (other.Moving is { Announced: true } motion)
                 {
@@ -100,6 +125,16 @@ internal sealed partial class WorldEntryService(CharacterService characters, Loc
                     if (remaining.Length > 1) selection.Emit(new ActorMoved(other.Character.Id, remaining));
                 }
             if (first) Broadcast(map, new ActorAppeared(Snapshot(selection, now)), except: selection);
+        }
+    }
+    internal void Redistribute(Selection selection, CharacteristicPoints points)
+    {
+        lock (gate)
+        {
+            Require(selection);
+            if (!selection.MapReady || selection.Fight is not null || outcomes is null) return;
+            selection.Rewards = outcomes.Redistribute(selection.Profile, ServerPresentation.RealmId, selection.Character.Id, catalog.Experience, points);
+            selection.Emit(new CharacterStats(selection.Attributes, selection.Character.Level));
         }
     }
     internal void Move(Selection selection, MovementRequest request)

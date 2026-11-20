@@ -34,7 +34,7 @@ internal sealed partial class WorldEntryService
         fight.Turns = new(fight.Encounter.Board, fight.Preparation.Fighters.Select(position => position.Controlled
             ? new CombatFighter(position.ActorId, position.Team, true, position.Cell, attributes.Life, attributes.Life,
                 attributes.ActionPoints, attributes.ActionPoints, attributes.MovementPoints, attributes.MovementPoints,
-                CombatStatistics.Empty, spells.Player(selection.Character.BreedId))
+                attributes.Statistics, spells.Player(selection.Character.BreedId, selection.Character.Level))
             : Opponent(position)));
         selection.Emit(new FightStarted(fight.Turns.Order));
         PublishTurn(selection, fight, false);
@@ -136,11 +136,13 @@ internal sealed partial class WorldEntryService
     }
     private void PublishAction(Selection selection, FightSession fight, CombatAction action)
     {
+        var attributes = selection.Attributes;
+        var level = selection.Character.Level;
         // Persist a terminal action before its animation is published. Losing the ACK cannot lose or duplicate its reward.
         if (fight.Turns!.Finished && outcomes is not null) CommitCombat(selection, fight, false);
         fight.Sequence = checked(++lastCombatSequence); fight.AnimationDeadline = After(combatTiming.AnimationMilliseconds);
         selection.Emit(new FightAction(selection.Character.Id, fight.Sequence.Value, action,
-            fight.Turns!.Fighters.Single(f => f.Controlled), selection.Character.Level, selection.Attributes.NextLevelExperience) { Attributes = selection.Attributes });
+            fight.Turns!.Fighters.Single(f => f.Controlled), level, attributes.NextLevelExperience) { Attributes = attributes });
     }
     internal void CombatAcknowledge(Selection selection, int sequence)
     {

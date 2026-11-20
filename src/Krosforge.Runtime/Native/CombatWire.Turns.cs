@@ -20,10 +20,16 @@ internal static partial class CombatWire
             throw new ProtocolException("Invalid combat animation acknowledgement.");
         return (int)sequence;
     }
-    private static byte[] Book(CombatView view) => J(
-        (view.Spells ?? []).Select((spell, slot) => B(2, J(N(3, slot), B(2, N(1, spell.Id)))))
-        .Concat((view.Spells ?? []).Select(spell => B(5, J(N(1, 0), N(2, spell.Id), N(4, spell.Grade)))))
-        .Append(N(6, view.Character.Id)).ToArray());
+    private static byte[] Book(CombatView view)
+    {
+        var spells = view.Spells ?? [];
+        var shortcuts = view.Shortcuts is { } saved
+            ? saved.Where(row => spells.Any(spell => spell.Id == row.Spell))
+            : spells.Select((spell, slot) => new SpellShortcut(slot, spell.Id));
+        return J(shortcuts.Select(row => B(2, SpellShortcutWire.Encode(row)))
+            .Concat(spells.Select(spell => B(5, J(N(1, 0), N(2, spell.Id), N(4, spell.Grade)))))
+            .Append(N(6, view.Character.Id)).ToArray());
+    }
     private static byte[] Simple(int id, int value) => J(N(2, id), B(3, N(2, value)));
     private static byte[] Usable(int id, int basis, int current, int used = 0) =>
         J(N(2, id), B(1, J(N(4, basis), N(6, current - basis), N(7, used))));
@@ -31,8 +37,8 @@ internal static partial class CombatWire
     internal static IEnumerable<byte[]> Attributes(CombatStatistics stats)
     {
         yield return Usable(10, stats.Strength, stats.Strength);
-        yield return Usable(11, 0, 0);
-        yield return Usable(12, 0, 0);
+        yield return Usable(11, stats.Vitality, stats.Vitality);
+        yield return Usable(12, stats.Wisdom, stats.Wisdom);
         yield return Usable(13, stats.Chance, stats.Chance);
         yield return Usable(14, stats.Agility, stats.Agility);
         yield return Usable(15, stats.Intelligence, stats.Intelligence);
@@ -45,16 +51,28 @@ internal static partial class CombatWire
     }
     private static byte[] Statistics(CombatFighter player, int level, long nextExperience, EntryAttributes? attributes)
     {
-        var entries = new[] { Usable(0, player.MaximumLife, player.MaximumLife), Simple(95, player.MaximumLife),
+        var lifeBasis = player.MaximumLife - player.Statistics.Vitality;
+        var entries = new[] { Usable(0, lifeBasis, lifeBasis), Simple(95, player.MaximumLife),
             Simple(96, 0), Simple(97, player.Life - player.MaximumLife), Simple(102, 0), Simple(5, level),
             Usable(1, player.MaximumAp, player.Ap, player.MaximumAp - player.Ap),
-            Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp), Usable(3, 0, 0),
+            Usable(23, player.MaximumMp, player.Mp, player.MaximumMp - player.Mp),
+            Usable(25, 0, player.BonusPower), // Native StatId.DamagePercent
+            Usable(3, attributes?.AvailablePoints ?? 0, attributes?.AvailablePoints ?? 0),
             Simple(29, attributes?.Energy ?? 10000), Simple(48, attributes?.Prospecting ?? 100), Simple(109, attributes?.Hunter ?? 0) };
         return B(1, J(entries.Concat(Attributes(player.Statistics)).Select(entry => B(1, entry))
             .Concat([N(11, attributes?.Experience ?? 0), N(8, attributes?.ExperienceFloor ?? 0), N(2, nextExperience), N(6, attributes?.Currency ?? 0), B(10, [])]).ToArray()));
     }
     private static byte[] Action(long source, int id, int variant, byte[] payload) => E("jsq", J(N(22, id), N(36, source), B(variant, payload)));
     private static byte[] Points(long actor, bool movement, int delta) => Action(actor, movement ? 129 : 102, 13, J(N(2, delta), N(3, actor)));
+    private static byte[] PowerBuff(CombatCast cast, CombatPowerGained power)
+    {
+        byte[] Turn(int round) => J(N(1, power.Order), N(2, round));
+        // juh -> lng -> llg in build 3.7.14.18. The default buff kind and
+        // dispellability are ordinary. The realized bonus is a single value.
+        var buff = J(B(2, Turn(power.Round)), N(3, cast.Critical ? 1 : 0), B(4, Turn(power.EndRound)),
+            N(5, power.Id), N(6, power.EffectId), N(8, cast.Actor), N(10, power.Amount), N(15, cast.Spell.Grade), N(16, cast.Spell.Id));
+        return E("juh", B(1, J(B(1, buff), N(2, 138), N(3, power.Target))));
+    }
     private static byte[][] ActionEvents(FightAction notice)
     {
         var action = notice.Action;
@@ -77,6 +95,12 @@ internal static partial class CombatWire
             {
                 if (effect is CombatLifeGained gain)
                 { result.Add(Action(action.Actor, 108, 39, J(N(2, gain.Target), N(4, gain.Amount)))); continue; }
+                if (effect is CombatPowerGained power)
+                {
+                    if (power.Replaced is { } replaced) result.Add(E("juu", J(N(1, replaced), N(2, power.Target))));
+                    result.Add(PowerBuff(cast, power));
+                    continue;
+                }
                 if (effect is not CombatLifeLost hit) throw new InvalidDataException("Unsupported resolved combat effect.");
                 var (damageAction, wireElement) = hit.Element switch
                 {

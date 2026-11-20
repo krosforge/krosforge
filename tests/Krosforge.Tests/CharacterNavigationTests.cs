@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Krosforge.Runtime;
 using Krosforge.Runtime.Native;
@@ -87,22 +88,32 @@ public sealed class CharacterNavigationTests : IDisposable
         await Apply(TestContext.Current.CancellationToken);
         Assert.Equal(Patched, await File.ReadAllBytesAsync(FilePath, TestContext.Current.CancellationToken));
     }
-    [Fact]
-    public async Task ReferenceAssemblyMatchesTheDocumentedPatchDigest()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReferenceAssemblyMatchesTheDocumentedPatchDigest(bool fromPreparedCopy)
     {
         var installation = Environment.GetEnvironmentVariable("KROSFORGE_TEST_CLIENT");
         Assert.SkipWhen(installation is null, "Requires the separately installed reference client; no game assets in CI.");
+        var token = TestContext.Current.CancellationToken;
         Directory.CreateDirectory(root);
-        File.Copy(Path.Combine(installation!, "GameAssembly.dll"), FilePath);
-        await CharacterNavigation.ApplyValidatedAsync(FilePath, ClientCompatibility.Hashes["GameAssembly.dll"],
-            CharacterNavigation.PatchedHash, CharacterNavigation.Patches, TestContext.Current.CancellationToken);
-        Assert.Equal(CharacterNavigation.PatchedHash, Hash(await File.ReadAllBytesAsync(FilePath, TestContext.Current.CancellationToken)));
+        var assemblyPath = Path.Combine(root, "GameAssembly.dll");
+        File.Copy(Path.Combine(installation!, "GameAssembly.dll"), assemblyPath);
+        if (fromPreparedCopy)
+            await CharacterNavigation.ApplyValidatedAsync(assemblyPath, ClientCompatibility.Hashes["GameAssembly.dll"],
+                CharacterNavigation.NavigationOnlyHash, CharacterNavigation.NavigationPatches, token);
+        await CharacterNavigation.ApplyAsync(installation!, root, token);
+        var assembly = await File.ReadAllBytesAsync(assemblyPath, token);
+        Assert.Equal(CharacterNavigation.PatchedHash, Hash(assembly));
         // Independent native control-flow contract: forced Back targets the list
         // renderer, while creation can still take the automatic-selection branch.
-        var assembly = await File.ReadAllBytesAsync(FilePath, TestContext.Current.CancellationToken);
         Assert.Equal(0x75, assembly[32519623]); // JNE for the forced-return flag
         Assert.Equal(32519679, 32519625 + (sbyte)assembly[32519624]);
         Assert.Equal(new byte[] { 0x75, 0x4f }, assembly[32519677..32519679]);
+        Assert.Equal(0xc3, assembly[32450432]); // Return before enumerating the automatic feature notice catalog.
+        // A missing season and a different season both reach the shared stat renderers.
+        Assert.Equal(47756012, 47754786 + BinaryPrimitives.ReadInt32LittleEndian(assembly.AsSpan(47754782, 4)));
+        Assert.Equal(47756012, 47754796 + BinaryPrimitives.ReadInt32LittleEndian(assembly.AsSpan(47754792, 4)));
         using var original = File.OpenRead(Path.Combine(installation!, "GameAssembly.dll"));
         Assert.Equal(ClientCompatibility.Hashes["GameAssembly.dll"], Convert.ToHexStringLower(SHA256.HashData(original)));
     }

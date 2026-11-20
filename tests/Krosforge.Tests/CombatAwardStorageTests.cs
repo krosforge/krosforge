@@ -71,5 +71,17 @@ public sealed class CombatAwardStorageTests : IDisposable
         Assert.Throws<InvalidDataException>(() => store.Read(Guid.NewGuid(), 290, character));
         Assert.Throws<InvalidDataException>(() => store.Read(profile, 291, character));
     }
+    [Fact]
+    public void SpellBarPersistsByCharacterAndDistinguishesAnEmptyLayoutFromTheDefault()
+    {
+        var (profile, character, store) = Create();
+        Assert.Null(store.Read(profile, 290, character).SpellBar);
+        var layout = new SpellShortcut[] { new(0, 0), new(5, 13338) };
+        store.SaveSpellBar(profile, 290, character, layout);
+        Assert.Throws<InvalidDataException>(() => store.SaveSpellBar(Guid.NewGuid(), 290, character, []));
+        Assert.Equal(layout, new CombatOutcomeStore(root).Read(profile, 290, character).SpellBar);
+        store.SaveSpellBar(profile, 290, character, []);
+        Assert.Empty(new CombatOutcomeStore(root).Read(profile, 290, character).SpellBar!);
+    }
     public void Dispose() { SqliteConnection.ClearAllPools(); if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
